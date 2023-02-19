@@ -9,3 +9,9 @@ edition = "2021"
 sha2 = "0.10.6"
 byteorder = "1.4.3"
 rand = "0.8.5"
+
+[profile.dev]
+opt-level=1
+
+[profile.release]
+opt-level=3
