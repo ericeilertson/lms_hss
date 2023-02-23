@@ -91,9 +91,9 @@ pub fn lookup_lms_algorithm_type(val :u32) -> Option<LmsAlgorithmType> {
 
 #[derive(Debug)]
 pub struct LmotsSignature {
-    ots_type: LmotsAlgorithmType,
-    nonce: [u8; 32],
-    y: Vec<Sha256Digest>,
+    pub ots_type: LmotsAlgorithmType,
+    pub nonce: [u8; 32],
+    pub y: Vec<Sha256Digest>,
 }
 
 #[derive(Debug)]
