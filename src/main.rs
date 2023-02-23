@@ -1,3 +1,5 @@
+use lms_hss::{LmotsAlgorithmType, LmsAlgorithmType};
+
 fn main() {
     let message = "this is the message I want signed".as_bytes();
     let the_lms_type = &lms_hss::LmsAlgorithmType::LmsSha256N32H10;
@@ -36,4 +38,6 @@ fn main() {
         assert_eq!(valid, true);
     }
     println!("{} out of {} signatures matched", passed, num_keys);
+
+    assert_eq!(LmotsAlgorithmType::from_i32(4 as i32), LmotsAlgorithmType::LmotsSha256N32W4);
 }

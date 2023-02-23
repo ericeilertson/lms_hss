@@ -2,6 +2,10 @@ use byteorder::{BigEndian, ByteOrder};
 use rand::random;
 use sha2::{Digest, Sha256};
 
+#[macro_use] extern crate enum_primitive;
+extern crate num;
+use num::FromPrimitive;
+
 const D_PBLC: u16 = 0x8080;
 const D_MESG: u16 = 0x8181;
 const D_LEAF: u16 = 0x8282;
@@ -43,6 +47,7 @@ pub type Sha256Digest = HashValue<32>;
 pub type Sha192Digest = HashValue<24>;
 pub type LmsIdentifier = [u8; 16];
 
+enum_from_primitive! {
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub enum LmotsAlgorithmType {
     LmotsReserved = 0,
@@ -55,8 +60,15 @@ pub enum LmotsAlgorithmType {
     LmotsSha256N24W4 = 7,
     LmotsSha256N24W8 = 8,
 }
+}
+pub fn lookup_lmots_algorithm_type(val :u32) -> Option<LmotsAlgorithmType> {
+    let value = LmotsAlgorithmType::from_u32(val);
+    return value;
+}
 
-#[derive(Debug)]
+
+enum_from_primitive! {
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum LmsAlgorithmType {
     LmsReserved = 0,
     LmsSha256N32H5 = 5,
@@ -70,6 +82,13 @@ pub enum LmsAlgorithmType {
     LmsSha256N24H20 = 13,
     LmsSha256N24H25 = 14,
 }
+}
+
+pub fn lookup_lms_algorithm_type(val :u32) -> Option<LmsAlgorithmType> {
+    let value = LmsAlgorithmType::from_u32(val);
+    return value;
+}
+
 #[derive(Debug)]
 pub struct LmotsSignature {
     ots_type: LmotsAlgorithmType,
@@ -92,7 +111,6 @@ pub struct LmotsParameter {
     w: u8,
     p: u16,
     ls: u8,
-    sig_len: u16,
 }
 
 const LMOTS_P: [LmotsParameter; 9] = [
@@ -102,7 +120,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 0,
         p: 0,
         ls: 0,
-        sig_len: 0,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N32W1,
@@ -110,7 +127,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 1,
         p: 265,
         ls: 7,
-        sig_len: 8516,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N32W2,
@@ -118,7 +134,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 2,
         p: 133,
         ls: 6,
-        sig_len: 4292,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N32W4,
@@ -126,7 +141,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 4,
         p: 67,
         ls: 4,
-        sig_len: 2180,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N32W8,
@@ -134,7 +148,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 8,
         p: 34,
         ls: 0,
-        sig_len: 1124,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N24W1,
@@ -142,7 +155,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 1,
         p: 200,
         ls: 8,
-        sig_len: 4828,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N24W2,
@@ -150,7 +162,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 2,
         p: 101,
         ls: 6,
-        sig_len: 2452,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N24W4,
@@ -158,7 +169,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 4,
         p: 51,
         ls: 4,
-        sig_len: 1252,
     },
     LmotsParameter {
         algorithm_name: LmotsAlgorithmType::LmotsSha256N24W8,
@@ -166,7 +176,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
         w: 8,
         p: 26,
         ls: 0,
-        sig_len: 652,
     },
 ];
 
@@ -434,6 +443,10 @@ fn candidate_ots_signature(
     signature: &LmotsSignature,
     message: &[u8],
 ) -> Sha256Digest {
+    if algo_type != &signature.ots_type {
+        println!("These have different ots types");
+        assert_eq!(algo_type, &signature.ots_type);
+    }
     let params = get_lmots_parameters(algo_type);
     let mut hasher = Sha256::new();
     let mut z = vec![Sha256Digest::default(); params.p as usize];
@@ -488,7 +501,7 @@ fn candidate_ots_signature(
     return Sha256Digest::from(final_result);
 }
 
-fn verify_ots_signature(
+pub fn verify_ots_signature(
     algo_type: &LmotsAlgorithmType,
     lms_identifier: &LmsIdentifier,
     q: &[u8; 4],
@@ -625,8 +638,8 @@ mod tests {
     #[test]
     fn hss_upper() {
         let _levels = 2;
-        let lms_type = 5;
-        let lmots_type = 4;
+        //let lms_type = 5;
+        //let lmots_type = 4;
         let identifier: [u8; 16] = [
             0x61, 0xa5, 0xd5, 0x7d, 0x37, 0xf5, 0xe4, 0x6b, 0xfb, 0x75, 0x20, 0x80, 0x6b, 0x07,
             0xa1, 0xb8,
@@ -636,12 +649,12 @@ mod tests {
             0xf2, 0xea, 0x30, 0xe5, 0x79, 0xf0, 0xdf, 0x58, 0xef, 0x8e, 0x29, 0x8d, 0xa0, 0x43,
             0x4c, 0xb2, 0xb8, 0x78,
         ]);
-        let lower_public_hash: [u8; 32] = [
+        let _lower_public_hash: [u8; 32] = [
             0x6c, 0x50, 0x04, 0x91, 0x7d, 0xa6, 0xea, 0xfe, 0x4d, 0x9e, 0xf6, 0xc6, 0x40, 0x7b,
             0x3d, 0xb0, 0xe5, 0x48, 0x5b, 0x12, 0x2d, 0x9e, 0xbe, 0x15, 0xcd, 0xa9, 0x3c, 0xfe,
             0xc5, 0x82, 0xd7, 0xab,
         ];
-        let lower_public_identifier: [u8; 16] = [
+        let _lower_public_identifier: [u8; 16] = [
             0xd2, 0xf1, 0x4f, 0xf6, 0x34, 0x6a, 0xf9, 0x64, 0x56, 0x9f, 0x7d, 0x6c, 0xb8, 0x80,
             0xa1, 0xb6,
         ];
@@ -1193,5 +1206,19 @@ mod tests {
             assert_eq!(valid, true);
         }
         assert_eq!(passed, num_keys);
+    }
+
+    #[test]
+    fn test_enum_lookup() {
+        assert_eq!(LmotsAlgorithmType::from_i32(3).unwrap(), LmotsAlgorithmType::LmotsSha256N32W4);
+        assert_eq!(lookup_lmots_algorithm_type(4).unwrap(), LmotsAlgorithmType::LmotsSha256N32W8);
+        assert_eq!(lookup_lms_algorithm_type(3), None);
+        assert_eq!(lookup_lms_algorithm_type(5).unwrap(), LmsAlgorithmType::LmsSha256N32H5);
+        assert_eq!(lookup_lms_algorithm_type(6).unwrap(), LmsAlgorithmType::LmsSha256N32H10);
+        assert_eq!(lookup_lms_algorithm_type(7).unwrap(), LmsAlgorithmType::LmsSha256N32H15);
+
+        assert_eq!(lookup_lms_algorithm_type(10).unwrap(), LmsAlgorithmType::LmsSha256N24H5);
+        assert_eq!(lookup_lms_algorithm_type(11).unwrap(), LmsAlgorithmType::LmsSha256N24H10);
+        assert_eq!(lookup_lms_algorithm_type(12).unwrap(), LmsAlgorithmType::LmsSha256N24H15);
     }
 }
