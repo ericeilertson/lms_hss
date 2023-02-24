@@ -48,7 +48,7 @@ pub type Sha192Digest = HashValue<24>;
 pub type LmsIdentifier = [u8; 16];
 
 enum_from_primitive! {
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum LmotsAlgorithmType {
     LmotsReserved = 0,
     LmotsSha256N32W1 = 1,
@@ -68,7 +68,7 @@ pub fn lookup_lmots_algorithm_type(val :u32) -> Option<LmotsAlgorithmType> {
 
 
 enum_from_primitive! {
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum LmsAlgorithmType {
     LmsReserved = 0,
     LmsSha256N32H5 = 5,
@@ -106,11 +106,11 @@ pub struct LmsSignature {
 
 #[derive(Debug)]
 pub struct LmotsParameter {
-    algorithm_name: LmotsAlgorithmType,
-    n: u8,
-    w: u8,
-    p: u16,
-    ls: u8,
+    pub algorithm_name: LmotsAlgorithmType,
+    pub n: u8,
+    pub w: u8,
+    pub p: u16,
+    pub ls: u8,
 }
 
 const LMOTS_P: [LmotsParameter; 9] = [
