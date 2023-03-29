@@ -4,7 +4,7 @@ fn main() {
     let the_ots_type = &lms_hss::LmotsAlgorithmType::LmotsSha256N32W4;
     let (_, tree_height) = lms_hss::get_lms_parameters(the_lms_type);
     let (lms_identifier, initial_q, t_tree, private_keys) =
-        lms_hss::create_lms_tree(the_lms_type, the_ots_type);
+        lms_hss::create_lms_tree::<32, 67>(the_lms_type, the_ots_type);
     let lms_public_key = t_tree[1];
 
     let num_keys = 1 << tree_height;
@@ -13,6 +13,7 @@ fn main() {
         let the_q_to_use = initial_q + offset_q;
         let lms_sig = lms_hss::lms_sign_message(
             the_ots_type,
+            the_lms_type,
             message,
             &t_tree,
             tree_height,
@@ -36,5 +37,4 @@ fn main() {
         assert_eq!(valid, true);
     }
     println!("{} out of {} signatures matched", passed, num_keys);
-
 }
