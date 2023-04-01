@@ -17,8 +17,9 @@ fn main() {
             tree_height,
             &lms_tree.private_keys[the_q_to_use as usize].clone(),
             the_q_to_use,
-            &lms_tree
-        ).unwrap();
+            &lms_tree,
+        )
+        .unwrap();
 
         let valid = lms_hss::verify_lms_signature(
             tree_height,
@@ -26,7 +27,8 @@ fn main() {
             the_q_to_use,
             &lms_public_key,
             &lms_sig,
-        ).unwrap();
+        )
+        .unwrap();
         if valid {
             passed += 1;
         }

@@ -2,7 +2,6 @@ use rand::random;
 use sha2::{Digest, Sha256};
 use std::hash::Hash;
 
-
 const D_PBLC: u16 = 0x8080;
 const D_MESG: u16 = 0x8181;
 const D_LEAF: u16 = 0x8282;
@@ -55,7 +54,7 @@ pub struct LmsTree<const N: usize, const P: usize> {
     pub lms_identifier: LmsIdentifier,
     pub q: u32,
     pub t_tree: Vec<HashValue<N>>,
-    pub private_keys: Vec<[HashValue<N>; P]>
+    pub private_keys: Vec<[HashValue<N>; P]>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -85,7 +84,6 @@ pub enum LmsAlgorithmType {
     LmsSha256N24H20 = 13,
     LmsSha256N24H25 = 14,
 }
-
 
 #[derive(Debug)]
 pub struct LmotsSignature<const N: usize, const P: usize> {
@@ -236,13 +234,15 @@ fn create_lmots_private_key<const N: usize, const P: usize>(
     assert_eq!(params.p as usize, P);
     let mut x = [HashValue::<N>::default(); P];
     if N > 32 {
-        return Err("Error generating private key, currently defined for a max of 32 bytes".to_string());
+        return Err(
+            "Error generating private key, currently defined for a max of 32 bytes".to_string(),
+        );
     }
-    for index in 0..P {
-        let ttmp: [u8; 32] = random(); // generate 32 bytes, the from will copy only the portion we need
+    for item in x.iter_mut() {
+        let t_tmp: [u8; 32] = random();
         let mut tmp: [u8; N] = [0u8; N];
-        tmp[..N].copy_from_slice(&ttmp[..N]);
-        x[index] = HashValue::<N>::from(tmp);
+        tmp[..N].copy_from_slice(&t_tmp[..N]);
+        *item = HashValue::<N>::from(tmp);
     }
     Ok(x)
 }
@@ -335,7 +335,7 @@ pub fn create_lms_tree<const N: usize, const P: usize>(
     for level in (1..(tree_height + 1)).rev() {
         let initial_offset = 1 << (level - 1);
         for offset in 0..initial_offset {
-            let node_num :u32 = offset + initial_offset;
+            let node_num: u32 = offset + initial_offset;
             let mut hasher = Sha256::new();
             hasher.update(lms_identifier);
             hasher.update(node_num.to_be_bytes());
@@ -513,14 +513,6 @@ pub fn verify_ots_signature<const N: usize, const P: usize>(
     Ok(true)
 }
 
-/*
-    pub lms_identifier: LmsIdentifier,
-    pub q: u32,
-    pub t_tree: Vec<HashValue<N>>,
-    pub private_keys: Vec<[HashValue<N>; P]>
- */
-
-
 pub fn lms_sign_message<const N: usize, const P: usize>(
     algo_type: &LmotsAlgorithmType,
     lms_algorithm: &LmsAlgorithmType,
@@ -528,11 +520,16 @@ pub fn lms_sign_message<const N: usize, const P: usize>(
     tree_height: u8,
     private_key: &[HashValue<N>; P],
     q: u32,
-    lms_tree: &LmsTree<N, P>
+    lms_tree: &LmsTree<N, P>,
 ) -> LMSResult<LmsSignature<N, P>> {
     let q_str = q.to_be_bytes();
-    let lmots_sig =
-        lmots_sign_message(algo_type, input_string, private_key, &lms_tree.lms_identifier, &q_str)?;
+    let lmots_sig = lmots_sign_message(
+        algo_type,
+        input_string,
+        private_key,
+        &lms_tree.lms_identifier,
+        &q_str,
+    )?;
     let mut path = vec![];
 
     let mut node_num = (1 << tree_height) + q;
@@ -892,20 +889,15 @@ mod tests {
             sig_type: LmsAlgorithmType::LmsSha256N32H5,
             lms_path: Vec::from(path),
         };
-        let lms_public_key = LmsPublicKey{
+        let lms_public_key = LmsPublicKey {
             lms_identifier: identifier,
             root_hash: hss_public_key,
             lms_type: LmsAlgorithmType::LmsSha256N32H5,
             lmots_type: LmotsAlgorithmType::LmotsSha256N32W8,
         };
 
-        let success = verify_lms_signature(
-            5,
-            &public_buffer,
-            q,
-            &lms_public_key,
-            &upper_signature,
-        ).unwrap();
+        let success =
+            verify_lms_signature(5, &public_buffer, q, &lms_public_key, &upper_signature).unwrap();
         assert!(success);
     }
 
@@ -1157,21 +1149,16 @@ mod tests {
             lms_path: Vec::from(final_path),
         };
 
-        let lms_public_key = LmsPublicKey{
+        let lms_public_key = LmsPublicKey {
             lms_identifier: lms_public_identifier,
             root_hash: lms_public_key,
             lms_type: LmsAlgorithmType::LmsSha256N32H5,
             lmots_type: LmotsAlgorithmType::LmotsSha256N32W8,
         };
 
-        let final_thingie = verify_lms_signature(
-            5,
-            &message,
-            lms_q,
-            &lms_public_key,
-            &final_lms_sig,
-        ).unwrap();
-        assert!(final_thingie);
+        let final_verification =
+            verify_lms_signature(5, &message, lms_q, &lms_public_key, &final_lms_sig).unwrap();
+        assert!(final_verification);
     }
 
     #[test]
@@ -1180,7 +1167,8 @@ mod tests {
         let the_lms_type = &LmsAlgorithmType::LmsSha256N24H10;
         let the_ots_type = &LmotsAlgorithmType::LmotsSha256N24W4;
         let (_, tree_height) = get_lms_parameters(the_lms_type);
-        let (lms_public_key, lms_tree) = create_lms_tree::<24, 51>(the_lms_type, the_ots_type).unwrap();
+        let (lms_public_key, lms_tree) =
+            create_lms_tree::<24, 51>(the_lms_type, the_ots_type).unwrap();
 
         let num_keys = 1 << tree_height;
         let mut passed = 0;
@@ -1194,8 +1182,9 @@ mod tests {
                 tree_height,
                 &lms_tree.private_keys[the_q_to_use as usize],
                 the_q_to_use,
-                &lms_tree
-            ).unwrap();
+                &lms_tree,
+            )
+            .unwrap();
 
             let valid = verify_lms_signature(
                 tree_height,
@@ -1203,7 +1192,8 @@ mod tests {
                 the_q_to_use,
                 &lms_public_key,
                 &lms_sig,
-            ).unwrap();
+            )
+            .unwrap();
             if valid {
                 passed += 1;
             }
@@ -1233,9 +1223,9 @@ mod tests {
                 tree_height,
                 &lms_tree.private_keys[the_q_to_use as usize],
                 the_q_to_use,
-                &lms_tree
-            ).unwrap();
-
+                &lms_tree,
+            )
+            .unwrap();
 
             let valid = verify_lms_signature(
                 tree_height,
@@ -1243,7 +1233,8 @@ mod tests {
                 the_q_to_use,
                 &lms_public_key,
                 &lms_sig,
-            ).unwrap();
+            )
+            .unwrap();
             if valid {
                 passed += 1;
             }
@@ -1251,5 +1242,4 @@ mod tests {
         }
         assert_eq!(passed, num_keys);
     }
-
 }
