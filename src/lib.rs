@@ -1,12 +1,7 @@
-use byteorder::{BigEndian, ByteOrder};
 use rand::random;
 use sha2::{Digest, Sha256};
 use std::hash::Hash;
 
-#[macro_use]
-extern crate enum_primitive;
-extern crate num;
-use num::FromPrimitive;
 
 const D_PBLC: u16 = 0x8080;
 const D_MESG: u16 = 0x8181;
@@ -49,7 +44,20 @@ pub type Sha256Digest = HashValue<32>;
 pub type Sha192Digest = HashValue<24>;
 pub type LmsIdentifier = [u8; 16];
 
-enum_from_primitive! {
+pub struct LmsPublicKey<const N: usize> {
+    pub lms_identifier: LmsIdentifier,
+    pub root_hash: HashValue<N>,
+    pub lms_type: LmsAlgorithmType,
+    pub lmots_type: LmotsAlgorithmType,
+}
+
+pub struct LmsTree<const N: usize, const P: usize> {
+    pub lms_identifier: LmsIdentifier,
+    pub q: u32,
+    pub t_tree: Vec<HashValue<N>>,
+    pub private_keys: Vec<[HashValue<N>; P]>
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum LmotsAlgorithmType {
     LmotsReserved = 0,
@@ -62,12 +70,7 @@ pub enum LmotsAlgorithmType {
     LmotsSha256N24W4 = 7,
     LmotsSha256N24W8 = 8,
 }
-}
-pub fn lookup_lmots_algorithm_type(val: u32) -> Option<LmotsAlgorithmType> {
-    LmotsAlgorithmType::from_u32(val)
-}
 
-enum_from_primitive! {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum LmsAlgorithmType {
     LmsReserved = 0,
@@ -82,11 +85,7 @@ pub enum LmsAlgorithmType {
     LmsSha256N24H20 = 13,
     LmsSha256N24H25 = 14,
 }
-}
 
-pub fn lookup_lms_algorithm_type(val: u32) -> Option<LmsAlgorithmType> {
-    LmsAlgorithmType::from_u32(val)
-}
 
 #[derive(Debug)]
 pub struct LmotsSignature<const N: usize, const P: usize> {
@@ -178,25 +177,6 @@ const LMOTS_P: [LmotsParameter; 9] = [
     },
 ];
 
-//do we actually need these?
-fn u32str(i: u32) -> [u8; 4] {
-    let mut buf = [0; 4];
-    BigEndian::write_u32(&mut buf, i);
-    buf
-}
-
-fn u16str(i: u16) -> [u8; 2] {
-    let mut buf = [0; 2];
-    BigEndian::write_u16(&mut buf, i);
-    buf
-}
-
-fn u8str(i: u8) -> [u8; 1] {
-    let mut buf = [0; 1];
-    buf[0] = i;
-    buf
-}
-
 pub fn get_lmots_parameters(algo_type: &LmotsAlgorithmType) -> &'static LmotsParameter {
     for i in &LMOTS_P {
         if i.algorithm_name == *algo_type {
@@ -284,14 +264,12 @@ fn calculate_ots_public_key<const N: usize, const P: usize>(
             let mut hasher = Sha256::new();
             hasher.update(lms_identifier);
             hasher.update(q);
-            hasher.update(u16str(i as u16));
-            hasher.update(u8str(j as u8));
+            hasher.update((i as u16).to_be_bytes());
+            hasher.update((j as u8).to_be_bytes());
             hasher.update(tmp);
             let t_blah = hasher.finalize();
             let mut blah = [0u8; N];
-            for i in 0..N {
-                blah[i] = t_blah[i];
-            }
+            blah[..N].copy_from_slice(&t_blah[..N]);
             tmp = HashValue::<N>::from(blah);
         }
         y[i] = tmp;
@@ -299,15 +277,13 @@ fn calculate_ots_public_key<const N: usize, const P: usize>(
     let mut hasher = Sha256::new();
     hasher.update(lms_identifier);
     hasher.update(q);
-    hasher.update(u16str(D_PBLC));
+    hasher.update(D_PBLC.to_be_bytes());
     for t in y {
         hasher.update(t);
     }
     let t_blah = hasher.finalize();
     let mut blah = [0u8; N];
-    for i in 0..N {
-        blah[i] = t_blah[i];
-    }
+    blah[..N].copy_from_slice(&t_blah[..N]);
     let return_value = HashValue::<N>::from(blah);
     Ok(return_value)
 }
@@ -329,12 +305,7 @@ fn create_lms_private_keys<const N: usize, const P: usize>(
 pub fn create_lms_tree<const N: usize, const P: usize>(
     lms_type: &LmsAlgorithmType,
     ots_type: &LmotsAlgorithmType,
-) -> LMSResult<(
-    LmsIdentifier,
-    u32,
-    Vec<HashValue<N>>,
-    Vec<[HashValue<N>; P]>,
-)> {
+) -> LMSResult<(LmsPublicKey<N>, LmsTree<N, P>)> {
     let (hash_size, tree_height) = get_lms_parameters(lms_type);
     assert_eq!(hash_size as usize, N);
     let num_nodes = 1 << (tree_height + 1); // we will instantiate an array to store the entire tree
@@ -346,43 +317,51 @@ pub fn create_lms_tree<const N: usize, const P: usize>(
     // Copy the public keys of the leaves into the leaves of the tree
     let initial_offset = private_keys.len();
     for offset in 0..private_keys.len() {
-        let q = u32str(offset as u32);
+        let q = (offset as u32).to_be_bytes();
         let ots_key =
             calculate_ots_public_key(ots_type, &lms_identifier, &q, &private_keys[offset])?;
         let mut hasher = Sha256::new();
         hasher.update(lms_identifier);
         let r = (initial_offset + offset) as u32;
-        hasher.update(u32str(r));
-        hasher.update(u16str(D_LEAF));
+        hasher.update(r.to_be_bytes());
+        hasher.update(D_LEAF.to_be_bytes());
         hasher.update(ots_key);
         let t_blah = hasher.finalize();
         let mut blah = [0u8; N];
-        for i in 0..N {
-            blah[i] = t_blah[i];
-        }
+        blah[..N].copy_from_slice(&t_blah[..N]);
         t_tree[initial_offset + offset] = HashValue::<N>::from(blah);
     }
     // Now process each layer of tree from the bottom up
     for level in (1..(tree_height + 1)).rev() {
         let initial_offset = 1 << (level - 1);
         for offset in 0..initial_offset {
-            let node_num = offset + initial_offset;
+            let node_num :u32 = offset + initial_offset;
             let mut hasher = Sha256::new();
             hasher.update(lms_identifier);
-            hasher.update(u32str(node_num));
-            hasher.update(u16str(D_INTR));
+            hasher.update(node_num.to_be_bytes());
+            hasher.update(D_INTR.to_be_bytes());
             hasher.update(t_tree[2 * node_num as usize]);
             hasher.update(t_tree[(2 * node_num) as usize + 1]);
             let t_blah = hasher.finalize();
             let mut blah = [0u8; N];
-            for i in 0..N {
-                blah[i] = t_blah[i];
-            }
+            blah[..N].copy_from_slice(&t_blah[..N]);
             t_tree[node_num as usize] = HashValue::<N>::from(blah);
         }
     }
 
-    Ok((lms_identifier, initial_q, t_tree, private_keys))
+    let lms_public_key = LmsPublicKey::<N> {
+        lms_identifier,
+        root_hash: t_tree[1],
+        lms_type: *lms_type,
+        lmots_type: *ots_type,
+    };
+    let lms_tree = LmsTree::<N, P> {
+        lms_identifier,
+        q: initial_q,
+        t_tree,
+        private_keys,
+    };
+    Ok((lms_public_key, lms_tree))
 }
 
 fn checksum(algo_type: &LmotsAlgorithmType, input_string: &[u8]) -> u16 {
@@ -415,7 +394,7 @@ fn lmots_sign_message<const N: usize, const P: usize>(
     let mut hasher = Sha256::new();
     hasher.update(lms_identifier);
     hasher.update(q);
-    hasher.update(u16str(D_MESG));
+    hasher.update(D_MESG.to_be_bytes());
     hasher.update(nonce);
     hasher.update(input_string);
     let tq = hasher.finalize();
@@ -424,7 +403,7 @@ fn lmots_sign_message<const N: usize, const P: usize>(
         message_hash_with_checksum[index] = *b;
     }
     let checksum_q = checksum(algo_type, &message_hash_with_checksum);
-    let be_checksum = u16str(checksum_q);
+    let be_checksum = checksum_q.to_be_bytes();
     message_hash_with_checksum[N] = be_checksum[0];
     message_hash_with_checksum[N + 1] = be_checksum[1];
 
@@ -435,14 +414,12 @@ fn lmots_sign_message<const N: usize, const P: usize>(
             let mut hasher = Sha256::new();
             hasher.update(lms_identifier);
             hasher.update(q);
-            hasher.update(u16str(i));
-            hasher.update(u8str(j));
+            hasher.update(i.to_be_bytes());
+            hasher.update(j.to_be_bytes());
             hasher.update(tmp);
             let t_blah = hasher.finalize();
             let mut blah = [0u8; N];
-            for i in 0..N {
-                blah[i] = t_blah[i];
-            }
+            blah[..N].copy_from_slice(&t_blah[..N]);
             tmp = HashValue::<N>::from(blah);
         }
         y[i as usize] = tmp;
@@ -474,7 +451,7 @@ fn candidate_ots_signature<const N: usize, const P: usize>(
     let mut z = [HashValue::<N>::default(); P];
     hasher.update(lms_identifier);
     hasher.update(q);
-    hasher.update(u16str(D_MESG));
+    hasher.update(D_MESG.to_be_bytes());
     hasher.update(signature.nonce);
     hasher.update(message);
     let tq = hasher.finalize();
@@ -483,7 +460,7 @@ fn candidate_ots_signature<const N: usize, const P: usize>(
         message_hash_with_checksum[index] = *b;
     }
     let checksum_q = checksum(algo_type, &message_hash_with_checksum);
-    let be_checksum = u16str(checksum_q);
+    let be_checksum = checksum_q.to_be_bytes();
     message_hash_with_checksum[N] = be_checksum[0];
     message_hash_with_checksum[N + 1] = be_checksum[1];
 
@@ -496,14 +473,12 @@ fn candidate_ots_signature<const N: usize, const P: usize>(
             let mut hasher = Sha256::new();
             hasher.update(lms_identifier);
             hasher.update(q);
-            hasher.update(u16str(i));
-            hasher.update(u8str(j));
+            hasher.update(i.to_be_bytes());
+            hasher.update(j.to_be_bytes());
             hasher.update(tmp);
             let t_blah = hasher.finalize();
             let mut blah = [0u8; N];
-            for i in 0..N {
-                blah[i] = t_blah[i];
-            }
+            blah[..N].copy_from_slice(&t_blah[..N]);
             tmp = HashValue::<N>::from(blah);
         }
         z[i as usize] = tmp;
@@ -511,15 +486,13 @@ fn candidate_ots_signature<const N: usize, const P: usize>(
     let mut hasher = Sha256::new();
     hasher.update(lms_identifier);
     hasher.update(q);
-    hasher.update(u16str(D_PBLC));
+    hasher.update(D_PBLC.to_be_bytes());
     for t in z {
         hasher.update(t);
     }
     let t_blah = hasher.finalize();
     let mut blah = [0u8; N];
-    for i in 0..N {
-        blah[i] = t_blah[i];
-    }
+    blah[..N].copy_from_slice(&t_blah[..N]);
     let result = HashValue::<N>::from(blah);
     Ok(result)
 }
@@ -540,28 +513,35 @@ pub fn verify_ots_signature<const N: usize, const P: usize>(
     Ok(true)
 }
 
+/*
+    pub lms_identifier: LmsIdentifier,
+    pub q: u32,
+    pub t_tree: Vec<HashValue<N>>,
+    pub private_keys: Vec<[HashValue<N>; P]>
+ */
+
+
 pub fn lms_sign_message<const N: usize, const P: usize>(
     algo_type: &LmotsAlgorithmType,
     lms_algorithm: &LmsAlgorithmType,
     input_string: &[u8],
-    t_tree: &[HashValue<N>],
     tree_height: u8,
     private_key: &[HashValue<N>; P],
-    lms_identifier: &LmsIdentifier,
     q: u32,
+    lms_tree: &LmsTree<N, P>
 ) -> LMSResult<LmsSignature<N, P>> {
-    let q_str = u32str(q);
+    let q_str = q.to_be_bytes();
     let lmots_sig =
-        lmots_sign_message(algo_type, input_string, private_key, lms_identifier, &q_str)?;
+        lmots_sign_message(algo_type, input_string, private_key, &lms_tree.lms_identifier, &q_str)?;
     let mut path = vec![];
 
     let mut node_num = (1 << tree_height) + q;
     let mut sibling = node_num ^ 1;
-    path.push(t_tree[sibling as usize]);
+    path.push(lms_tree.t_tree[sibling as usize]);
     for _ in 1..tree_height {
         node_num >>= 1;
         sibling = node_num ^ 1;
-        path.push(t_tree[sibling as usize]);
+        path.push(lms_tree.t_tree[sibling as usize]);
     }
     let signature = LmsSignature {
         q,
@@ -574,69 +554,61 @@ pub fn lms_sign_message<const N: usize, const P: usize>(
 
 pub fn verify_lms_signature<const N: usize, const P: usize>(
     tree_height: u8,
-    algo_type: &LmotsAlgorithmType,
     input_string: &[u8],
-    lms_identifier: &LmsIdentifier,
     q: u32,
-    lms_public_key: &HashValue<N>,
+    lms_public_key: &LmsPublicKey<N>,
     lms_sig: &LmsSignature<N, P>,
 ) -> LMSResult<bool> {
-    let q_str = u32str(q);
+    let q_str = q.to_be_bytes();
     let candidate_key = candidate_ots_signature(
-        algo_type,
-        lms_identifier,
+        &lms_public_key.lmots_type,
+        &lms_public_key.lms_identifier,
         &q_str,
         &lms_sig.lmots_signature,
         input_string,
     )?;
     let mut node_num = (1 << tree_height) + q;
     let mut hasher = Sha256::new();
-    hasher.update(lms_identifier);
-    hasher.update(u32str(node_num));
-    hasher.update(u16str(D_LEAF));
+    hasher.update(lms_public_key.lms_identifier);
+    hasher.update(node_num.to_be_bytes());
+    hasher.update(D_LEAF.to_be_bytes());
     hasher.update(candidate_key);
     let t_blah = hasher.finalize();
     let mut blah = [0u8; N];
-    for i in 0..N {
-        blah[i] = t_blah[i];
-    }
+    blah[..N].copy_from_slice(&t_blah[..N]);
     let mut temp = HashValue::<N>::from(blah);
     let mut i = 0;
     while node_num > 1 {
         if node_num % 2 == 1 {
             let mut hasher = Sha256::new();
-            hasher.update(lms_identifier);
-            hasher.update(u32str(node_num / 2));
-            hasher.update(u16str(D_INTR));
+            hasher.update(lms_public_key.lms_identifier);
+            hasher.update((node_num / 2).to_be_bytes());
+            hasher.update(D_INTR.to_be_bytes());
             hasher.update(lms_sig.lms_path[i]);
             hasher.update(temp);
             let t_blah = hasher.finalize();
             let mut blah = [0u8; N];
-            for i in 0..N {
-                blah[i] = t_blah[i];
-            }
+            blah[..N].copy_from_slice(&t_blah[..N]);
             temp = HashValue::<N>::from(blah);
         } else {
             let mut hasher = Sha256::new();
-            hasher.update(lms_identifier);
-            hasher.update(u32str(node_num / 2));
-            hasher.update(u16str(D_INTR));
+            hasher.update(lms_public_key.lms_identifier);
+            hasher.update((node_num / 2).to_be_bytes());
+            hasher.update(D_INTR.to_be_bytes());
             hasher.update(temp);
             hasher.update(lms_sig.lms_path[i]);
             let t_blah = hasher.finalize();
             let mut blah = [0u8; N];
-            for i in 0..N {
-                blah[i] = t_blah[i];
-            }
+            blah[..N].copy_from_slice(&t_blah[..N]);
             temp = HashValue::<N>::from(blah);
         }
         node_num /= 2;
         i += 1;
     }
     let candidate_key = temp;
-    if candidate_key != *lms_public_key {
+    if candidate_key != lms_public_key.root_hash {
         println!("Candidate LMS public key is {:?}", candidate_key);
-        println!("The provided LMS key is     {:?}", lms_public_key);
+        println!("The provided LMS key is     {:?}", lms_public_key.root_hash);
         return Ok(false);
     }
 
@@ -920,14 +892,18 @@ mod tests {
             sig_type: LmsAlgorithmType::LmsSha256N32H5,
             lms_path: Vec::from(path),
         };
+        let lms_public_key = LmsPublicKey{
+            lms_identifier: identifier,
+            root_hash: hss_public_key,
+            lms_type: LmsAlgorithmType::LmsSha256N32H5,
+            lmots_type: LmotsAlgorithmType::LmotsSha256N32W8,
+        };
 
         let success = verify_lms_signature(
             5,
-            &LmotsAlgorithmType::LmotsSha256N32W8,
             &public_buffer,
-            &identifier,
             q,
-            &hss_public_key,
+            &lms_public_key,
             &upper_signature,
         ).unwrap();
         assert!(success);
@@ -1181,17 +1157,21 @@ mod tests {
             lms_path: Vec::from(final_path),
         };
 
+        let lms_public_key = LmsPublicKey{
+            lms_identifier: lms_public_identifier,
+            root_hash: lms_public_key,
+            lms_type: LmsAlgorithmType::LmsSha256N32H5,
+            lmots_type: LmotsAlgorithmType::LmotsSha256N32W8,
+        };
+
         let final_thingie = verify_lms_signature(
             5,
-            &LmotsAlgorithmType::LmotsSha256N32W8,
             &message,
-            &lms_public_identifier,
             lms_q,
             &lms_public_key,
             &final_lms_sig,
         ).unwrap();
         assert!(final_thingie);
-        println!("Final thingie is {}", final_thingie);
     }
 
     #[test]
@@ -1200,31 +1180,26 @@ mod tests {
         let the_lms_type = &LmsAlgorithmType::LmsSha256N24H10;
         let the_ots_type = &LmotsAlgorithmType::LmotsSha256N24W4;
         let (_, tree_height) = get_lms_parameters(the_lms_type);
-        let (lms_identifier, initial_q, t_tree, private_keys) =
-            create_lms_tree::<24, 51>(the_lms_type, the_ots_type).unwrap();
-        let lms_public_key = t_tree[1];
+        let (lms_public_key, lms_tree) = create_lms_tree::<24, 51>(the_lms_type, the_ots_type).unwrap();
 
         let num_keys = 1 << tree_height;
         let mut passed = 0;
-        println!("About to perform {} sha256/192 sign and verifies", num_keys);
+        //println!("About to perform {} sha256/192 sign and verifies", num_keys);
         for offset_q in 0..num_keys {
-            let the_q_to_use = initial_q + offset_q;
+            let the_q_to_use = lms_tree.q + offset_q;
             let lms_sig = lms_sign_message(
                 the_ots_type,
                 the_lms_type,
                 message,
-                &t_tree,
                 tree_height,
-                &private_keys[the_q_to_use as usize],
-                &lms_identifier,
+                &lms_tree.private_keys[the_q_to_use as usize],
                 the_q_to_use,
+                &lms_tree
             ).unwrap();
 
             let valid = verify_lms_signature(
                 tree_height,
-                the_ots_type,
                 message,
-                &lms_identifier,
                 the_q_to_use,
                 &lms_public_key,
                 &lms_sig,
@@ -1243,31 +1218,28 @@ mod tests {
         let the_lms_type = &LmsAlgorithmType::LmsSha256N32H10;
         let the_ots_type = &LmotsAlgorithmType::LmotsSha256N32W4;
         let (_, tree_height) = get_lms_parameters(the_lms_type);
-        let (lms_identifier, initial_q, t_tree, private_keys) =
+        let (lms_public_key, lms_tree) =
             create_lms_tree::<32, 67>(the_lms_type, the_ots_type).unwrap();
-        let lms_public_key = t_tree[1];
 
         let num_keys = 1 << tree_height;
         let mut passed = 0;
-        println!("About to perform {} sha256 sign and verifies", num_keys);
+        //println!("About to perform {} sha256 sign and verifies", num_keys);
         for offset_q in 0..num_keys {
-            let the_q_to_use = initial_q + offset_q;
+            let the_q_to_use = lms_tree.q + offset_q;
             let lms_sig = lms_sign_message(
                 the_ots_type,
                 the_lms_type,
                 message,
-                &t_tree,
                 tree_height,
-                &private_keys[the_q_to_use as usize],
-                &lms_identifier,
+                &lms_tree.private_keys[the_q_to_use as usize],
                 the_q_to_use,
+                &lms_tree
             ).unwrap();
+
 
             let valid = verify_lms_signature(
                 tree_height,
-                the_ots_type,
                 message,
-                &lms_identifier,
                 the_q_to_use,
                 &lms_public_key,
                 &lms_sig,
@@ -1280,41 +1252,4 @@ mod tests {
         assert_eq!(passed, num_keys);
     }
 
-    #[test]
-    fn test_enum_lookup() {
-        assert_eq!(
-            LmotsAlgorithmType::from_i32(3).unwrap(),
-            LmotsAlgorithmType::LmotsSha256N32W4
-        );
-        assert_eq!(
-            lookup_lmots_algorithm_type(4).unwrap(),
-            LmotsAlgorithmType::LmotsSha256N32W8
-        );
-        assert_eq!(lookup_lms_algorithm_type(3), None);
-        assert_eq!(
-            lookup_lms_algorithm_type(5).unwrap(),
-            LmsAlgorithmType::LmsSha256N32H5
-        );
-        assert_eq!(
-            lookup_lms_algorithm_type(6).unwrap(),
-            LmsAlgorithmType::LmsSha256N32H10
-        );
-        assert_eq!(
-            lookup_lms_algorithm_type(7).unwrap(),
-            LmsAlgorithmType::LmsSha256N32H15
-        );
-
-        assert_eq!(
-            lookup_lms_algorithm_type(10).unwrap(),
-            LmsAlgorithmType::LmsSha256N24H5
-        );
-        assert_eq!(
-            lookup_lms_algorithm_type(11).unwrap(),
-            LmsAlgorithmType::LmsSha256N24H10
-        );
-        assert_eq!(
-            lookup_lms_algorithm_type(12).unwrap(),
-            LmsAlgorithmType::LmsSha256N24H15
-        );
-    }
 }
