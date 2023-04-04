@@ -2,7 +2,7 @@ fn main() {
     let message = "this is the message I want signed".as_bytes();
     let the_lms_type = &lms_hss::LmsAlgorithmType::LmsSha256N32H10;
     let the_ots_type = &lms_hss::LmotsAlgorithmType::LmotsSha256N32W4;
-    let (_, tree_height) = lms_hss::get_lms_parameters(the_lms_type);
+    let (_, tree_height) = lms_hss::get_lms_parameters(the_lms_type).unwrap();
     let (lms_public_key, lms_tree) =
         lms_hss::create_lms_tree::<32, 67>(the_lms_type, the_ots_type).unwrap();
 
