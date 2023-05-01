@@ -542,7 +542,7 @@ pub fn verify_ots_signature<const N: usize>(
 }
 
 pub fn parse_public_contents<const N: usize>(
-    public_string: &Vec<u8>,
+    public_string: &[u8],
 ) -> LMSResult<LmsPublicKey<N>> {
     let mut parse_position = 0;
 
