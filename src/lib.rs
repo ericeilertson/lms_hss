@@ -1,6 +1,5 @@
 use rand::random;
 use sha2::{Digest, Sha256};
-use std::hash::Hash;
 
 const D_PBLC: u16 = 0x8080;
 const D_MESG: u16 = 0x8181;
@@ -43,6 +42,11 @@ pub type Sha256Digest = HashValue<32>;
 pub type Sha192Digest = HashValue<24>;
 pub type LmsIdentifier = [u8; 16];
 
+pub fn slice_to_num(buff: &[u8]) -> u32 {
+    u32::from_be_bytes(buff.try_into().unwrap())
+}
+
+#[derive(Debug)]
 pub struct LmsPublicKey<const N: usize> {
     pub lms_identifier: LmsIdentifier,
     pub root_hash: HashValue<N>,
@@ -50,11 +54,11 @@ pub struct LmsPublicKey<const N: usize> {
     pub lmots_type: LmotsAlgorithmType,
 }
 
-pub struct LmsTree<const N: usize, const P: usize> {
+pub struct LmsTree<const N: usize> {
     pub lms_identifier: LmsIdentifier,
     pub q: u32,
     pub t_tree: Vec<HashValue<N>>,
-    pub private_keys: Vec<[HashValue<N>; P]>,
+    pub private_keys: Vec<Vec<HashValue<N>>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -86,16 +90,18 @@ pub enum LmsAlgorithmType {
 }
 
 #[derive(Debug)]
-pub struct LmotsSignature<const N: usize, const P: usize> {
+pub struct LmotsSignature<const N: usize> {
     pub ots_type: LmotsAlgorithmType,
     pub nonce: [u8; N],
-    pub y: [HashValue<N>; P],
+    pub y: Vec<HashValue<N>>,
 }
 
 #[derive(Debug)]
-pub struct LmsSignature<const N: usize, const P: usize> {
+pub struct LmsSignature<const N: usize> {
     pub q: u32,
-    pub lmots_signature: LmotsSignature<N, P>,
+    pub ots_type: LmotsAlgorithmType,
+    pub nonce: [u8; N],
+    pub y: Vec<HashValue<N>>,
     pub sig_type: LmsAlgorithmType,
     pub lms_path: Vec<HashValue<N>>,
 }
@@ -200,6 +206,38 @@ pub fn get_lms_parameters(algo_type: &LmsAlgorithmType) -> LMSResult<(u8, u8)> {
     }
 }
 
+pub fn lookup_lms_algorithm_type(alg_value: u32) -> LMSResult<LmsAlgorithmType> {
+    // take in a 32 bit value and return the corresponding LMS algorithm type
+    match alg_value {
+        5 => Ok(LmsAlgorithmType::LmsSha256N32H5),
+        6 => Ok(LmsAlgorithmType::LmsSha256N32H10),
+        7 => Ok(LmsAlgorithmType::LmsSha256N32H15),
+        8 => Ok(LmsAlgorithmType::LmsSha256N32H20),
+        9 => Ok(LmsAlgorithmType::LmsSha256N32H25),
+        10 => Ok(LmsAlgorithmType::LmsSha256N24H5),
+        11 => Ok(LmsAlgorithmType::LmsSha256N24H10),
+        12 => Ok(LmsAlgorithmType::LmsSha256N24H15),
+        13 => Ok(LmsAlgorithmType::LmsSha256N24H20),
+        14 => Ok(LmsAlgorithmType::LmsSha256N24H25),
+        _ => Err("Unknown LMS algorithm type".to_string()),
+    }
+}
+
+pub fn lookup_lmots_algorithm_type(alg_value: u32) -> LMSResult<LmotsAlgorithmType> {
+    // take in a 32 bit value and return the corresponding LMOTS algorithm type
+    match alg_value {
+        1 => Ok(LmotsAlgorithmType::LmotsSha256N32W1),
+        2 => Ok(LmotsAlgorithmType::LmotsSha256N32W2),
+        3 => Ok(LmotsAlgorithmType::LmotsSha256N32W4),
+        4 => Ok(LmotsAlgorithmType::LmotsSha256N32W8),
+        5 => Ok(LmotsAlgorithmType::LmotsSha256N24W1),
+        6 => Ok(LmotsAlgorithmType::LmotsSha256N24W2),
+        7 => Ok(LmotsAlgorithmType::LmotsSha256N24W4),
+        8 => Ok(LmotsAlgorithmType::LmotsSha256N24W8),
+        _ => Err("Unknown LMOTS algorithm type".to_string()),
+    }
+}
+
 // follows pseudo code at https://www.rfc-editor.org/rfc/rfc8554#section-3.1.3
 fn coefficient(s: &[u8], i: usize, w: usize) -> u8 {
     let blah: u16 = (1 << (w)) - 1;
@@ -225,36 +263,34 @@ fn coefficient(s: &[u8], i: usize, w: usize) -> u8 {
     small_blah & rs
 }
 
-fn create_lmots_private_key<const N: usize, const P: usize>(
+fn create_lmots_private_key<const N: usize>(
     algo_type: &LmotsAlgorithmType,
-) -> LMSResult<[HashValue<N>; P]> {
+) -> LMSResult<Vec<HashValue<N>>> {
     let params = get_lmots_parameters(algo_type)?;
-    assert_eq!(params.p as usize, P);
-    let mut x = [HashValue::<N>::default(); P];
+    let mut x = vec![];
     if N > 32 {
         return Err(
             "Error generating private key, currently defined for a max of 32 bytes".to_string(),
         );
     }
-    for item in x.iter_mut() {
-        let t_tmp: [u8; 32] = random();  // it would be nice if random() could be generic
+    for _ in 0..params.p {
+        let t_tmp: [u8; 32] = random();
         let mut tmp: [u8; N] = [0u8; N];
         tmp[..N].copy_from_slice(&t_tmp[..N]);
-        *item = HashValue::<N>::from(tmp);
+        x.push(HashValue::<N>::from(tmp));
     }
     Ok(x)
 }
 
-fn calculate_ots_public_key<const N: usize, const P: usize>(
+fn calculate_ots_public_key<const N: usize>(
     algo_type: &LmotsAlgorithmType,
     lms_identifier: &LmsIdentifier,
     q: &[u8; 4],
-    x: &[HashValue<N>; P],
+    x: &[HashValue<N>],
 ) -> LMSResult<HashValue<N>> {
     let params = get_lmots_parameters(algo_type)?;
     assert_eq!(params.n as usize, N);
-    assert_eq!(params.p as usize, P);
-    let mut y = [HashValue::<N>::default(); P];
+    let mut y = vec![];
     for (i, xi) in x.iter().enumerate() {
         let mut tmp = *xi;
         let upper = (1 << params.w) - 1;
@@ -270,7 +306,7 @@ fn calculate_ots_public_key<const N: usize, const P: usize>(
             blah[..N].copy_from_slice(&t_blah[..N]);
             tmp = HashValue::<N>::from(blah);
         }
-        y[i] = tmp;
+        y.push(tmp);
     }
     let mut hasher = Sha256::new();
     hasher.update(lms_identifier);
@@ -287,10 +323,10 @@ fn calculate_ots_public_key<const N: usize, const P: usize>(
 }
 
 // this is copied derived from section 5.2 of rfc 8554
-fn create_lms_private_keys<const N: usize, const P: usize>(
+fn create_lms_private_keys<const N: usize>(
     tree_height: u8,
     ots_type: &LmotsAlgorithmType,
-) -> LMSResult<(LmsIdentifier, u32, Vec<[HashValue<N>; P]>)> {
+) -> LMSResult<(LmsIdentifier, u32, Vec<Vec<HashValue<N>>>)> {
     let lms_identifier: LmsIdentifier = random();
     let upper = 1 << tree_height;
     let mut ots_private = vec![];
@@ -300,17 +336,19 @@ fn create_lms_private_keys<const N: usize, const P: usize>(
     Ok((lms_identifier, 0, ots_private))
 }
 
-pub fn create_lms_tree<const N: usize, const P: usize>(
+pub fn create_lms_tree<const N: usize>(
     lms_type: &LmsAlgorithmType,
     ots_type: &LmotsAlgorithmType,
-) -> LMSResult<(LmsPublicKey<N>, LmsTree<N, P>)> {
+) -> LMSResult<(LmsPublicKey<N>, LmsTree<N>)> {
     let (hash_size, tree_height) = get_lms_parameters(lms_type)?;
     assert_eq!(hash_size as usize, N);
     let num_nodes = 1 << (tree_height + 1); // we will instantiate an array to store the entire tree
     let mut t_tree = vec![HashValue::<N>::default(); num_nodes]; // the tree root will be at t_tree[1]
     let (lms_identifier, initial_q, private_keys) = create_lms_private_keys(tree_height, ots_type)?;
     if num_nodes != 2 * private_keys.len() {
-        return Err("The tree needs to be twice the size of the number of private keys".to_string());
+        return Err(
+            "The tree needs to be twice the size of the number of private keys".to_string(),
+        );
     }
     // Copy the public keys of the leaves into the leaves of the tree
     let initial_offset = private_keys.len();
@@ -353,7 +391,7 @@ pub fn create_lms_tree<const N: usize, const P: usize>(
         lms_type: *lms_type,
         lmots_type: *ots_type,
     };
-    let lms_tree = LmsTree::<N, P> {
+    let lms_tree = LmsTree::<N> {
         lms_identifier,
         q: initial_q,
         t_tree,
@@ -373,21 +411,20 @@ fn checksum(algo_type: &LmotsAlgorithmType, input_string: &[u8]) -> LMSResult<u1
     Ok(sum << params.ls)
 }
 
-fn lmots_sign_message<const N: usize, const P: usize>(
+fn lmots_sign_message<const N: usize>(
     algo_type: &LmotsAlgorithmType,
     input_string: &[u8],
-    private_key: &[HashValue<N>; P],
+    private_key: &Vec<HashValue<N>>,
     lms_identifier: &LmsIdentifier,
     q: &[u8; 4],
-) -> LMSResult<LmotsSignature<N, P>> {
+) -> LMSResult<LmotsSignature<N>> {
     let params = get_lmots_parameters(algo_type)?;
     assert_eq!(params.n as usize, N);
-    assert_eq!(params.p as usize, P);
     let nonce_t: [u8; 32] = random(); // in the RFC this is the C value
     let mut nonce = [0u8; N];
     nonce[..N].copy_from_slice(&nonce_t[..N]);
 
-    let mut y = [HashValue::<N>::default(); P];
+    let mut y = vec![];
     assert_eq!(private_key.len(), params.p as usize);
     let mut hasher = Sha256::new();
     hasher.update(lms_identifier);
@@ -420,7 +457,7 @@ fn lmots_sign_message<const N: usize, const P: usize>(
             blah[..N].copy_from_slice(&t_blah[..N]);
             tmp = HashValue::<N>::from(blah);
         }
-        y[i as usize] = tmp;
+        y.push(tmp);
     }
 
     let signature = LmotsSignature {
@@ -431,17 +468,16 @@ fn lmots_sign_message<const N: usize, const P: usize>(
     Ok(signature)
 }
 
-fn candidate_ots_signature<const N: usize, const P: usize>(
+fn candidate_ots_signature<const N: usize>(
     lms_identifier: &LmsIdentifier,
     q: &[u8; 4],
-    signature: &LmotsSignature<N, P>,
+    signature: &LmotsSignature<N>,
     message: &[u8],
 ) -> LMSResult<HashValue<N>> {
     let params = get_lmots_parameters(&signature.ots_type)?;
-    assert_eq!(params.p as usize, P);
     assert!(params.n < 33);
     let mut hasher = Sha256::new();
-    let mut z = [HashValue::<N>::default(); P];
+    let mut z = vec![];
     hasher.update(lms_identifier);
     hasher.update(q);
     hasher.update(D_MESG.to_be_bytes());
@@ -474,7 +510,7 @@ fn candidate_ots_signature<const N: usize, const P: usize>(
             blah[..N].copy_from_slice(&t_blah[..N]);
             tmp = HashValue::<N>::from(blah);
         }
-        z[i as usize] = tmp;
+        z.push(tmp);
     }
     let mut hasher = Sha256::new();
     hasher.update(lms_identifier);
@@ -490,11 +526,11 @@ fn candidate_ots_signature<const N: usize, const P: usize>(
     Ok(result)
 }
 
-pub fn verify_ots_signature<const N: usize, const P: usize>(
+pub fn verify_ots_signature<const N: usize>(
     lms_identifier: &LmsIdentifier,
     q: &[u8; 4],
     public_key: &HashValue<N>,
-    signature: &LmotsSignature<N, P>,
+    signature: &LmotsSignature<N>,
     message: &[u8],
 ) -> LMSResult<bool> {
     let final_result = candidate_ots_signature(lms_identifier, q, signature, message)?;
@@ -505,15 +541,139 @@ pub fn verify_ots_signature<const N: usize, const P: usize>(
     Ok(true)
 }
 
-pub fn lms_sign_message<const N: usize, const P: usize>(
+pub fn parse_public_contents<const N: usize>(
+    public_string: &Vec<u8>,
+) -> LMSResult<LmsPublicKey<N>> {
+    println!("Parsing public contents");
+    println!("Public contents: {:?}", public_string);
+    let mut parse_position = 0;
+    /*
+        //when reading from a file the first 4 bytes contain the number of HSS levels
+        let num_levels = slice_to_num(&public_string[parse_position..parse_position + 4]);
+        parse_position += 4;
+        println!("Num levels: {:?}", num_levels);
+    */
+
+    let lms_type = lookup_lms_algorithm_type(slice_to_num(
+        &public_string[parse_position..parse_position + 4],
+    ))
+        .unwrap();
+    parse_position += 4;
+    println!("Got an LM type of {:?}", lms_type);
+
+    let lmots_type = lookup_lmots_algorithm_type(slice_to_num(
+        &public_string[parse_position..parse_position + 4],
+    ))
+        .unwrap();
+    parse_position += 4;
+    println!("Got an LMOTS type of {:?}", lmots_type);
+
+    let mut lms_identifier = [0u8; 16];
+    lms_identifier.copy_from_slice(&public_string[parse_position..parse_position + 16]);
+    parse_position += 16;
+    println!("Got an LMS identifier of {:?}", lms_identifier);
+
+    let mut temp = [0u8; N];
+    temp.copy_from_slice(&public_string[parse_position..parse_position + N]);
+    //parse_position += N;
+    let public_hash = HashValue::<N>::from(temp);
+    println!("Got a public hash of {:?}", public_hash);
+
+    let pk = LmsPublicKey {
+        lms_type,
+        lmots_type,
+        lms_identifier,
+        root_hash: public_hash,
+    };
+    Ok(pk)
+}
+
+
+pub fn parse_signature_contents<const N: usize>(
+    signature: &[u8],
+) -> LMSResult<LmsSignature<N>> {
+    println!("Parsing signature contents");
+    let mut parse_position = 0;
+    /*
+        // when reading from a file the first 4 bytes contain the number of HSS levels
+        let num_levels = slice_to_num(&signature[parse_position..parse_position + 4]) + 1;
+        parse_position += 4;
+        println!("Num levels: {:?}", num_levels);
+    */
+
+    let q = slice_to_num(&signature[parse_position..parse_position + 4]);
+    parse_position += 4;
+    println!("Got a Q of {:?}", q);
+
+    let ots_type = lookup_lmots_algorithm_type(slice_to_num(
+        &signature[parse_position..parse_position + 4],
+    ))
+        .unwrap();
+    parse_position += 4;
+    println!("Got an OTS type of {:?}", ots_type);
+
+    let mut nonce = [0u8; N];
+    nonce.copy_from_slice(&signature[parse_position..parse_position + N]);
+    parse_position += N;
+    println!("Got a nonce of {:?}", nonce);
+
+    let lmots_params = get_lmots_parameters(&ots_type).unwrap();
+
+    let mut y = vec![];
+    for _ in 0..lmots_params.p {
+        let mut tmp = [0u8; N];
+        tmp.copy_from_slice(&signature[parse_position..parse_position + N]);
+        y.push(HashValue::<N>::from(tmp));
+        parse_position += N;
+    }
+    println!("Got a signature of size: {:?}", y.len(),);
+
+    println!(
+        "About to lookup lms_type for {:?}",
+        &signature[parse_position..parse_position + 4]
+    );
+    let lms_type = lookup_lms_algorithm_type(slice_to_num(
+        &signature[parse_position..parse_position + 4],
+    ))
+        .unwrap();
+    parse_position += 4;
+
+    let (hash_width, height) = get_lms_parameters(&lms_type).unwrap();
+    if N != hash_width as usize {
+        return Err("Hash sizes do not match".to_string());
+    }
+    println!("Expect params of {:?}", lmots_params);
+
+    let mut path = vec![];
+    for _ in 0..height {
+        let mut tmp = [0u8; N];
+        tmp.copy_from_slice(&signature[parse_position..parse_position + N]);
+        path.push(HashValue::<N>::from(tmp));
+        parse_position += N;
+    }
+    println!("Got a path of {:?}", path);
+    println!("Length of path: {:?}", path.len());
+    let lms_sig = LmsSignature {
+        q,
+        ots_type,
+        nonce,
+        y,
+        sig_type: lms_type,
+        lms_path: path,
+    };
+    Ok(lms_sig)
+}
+
+
+pub fn lms_sign_message<const N: usize>(
     algo_type: &LmotsAlgorithmType,
     lms_algorithm: &LmsAlgorithmType,
     input_string: &[u8],
     tree_height: u8,
-    private_key: &[HashValue<N>; P],
+    private_key: &Vec<HashValue<N>>,
     q: u32,
-    lms_tree: &LmsTree<N, P>,
-) -> LMSResult<LmsSignature<N, P>> {
+    lms_tree: &LmsTree<N>,
+) -> LMSResult<LmsSignature<N>> {
     let q_str = q.to_be_bytes();
     let lmots_sig = lmots_sign_message(
         algo_type,
@@ -535,27 +695,33 @@ pub fn lms_sign_message<const N: usize, const P: usize>(
     let signature = LmsSignature {
         q,
         sig_type: *lms_algorithm,
-        lmots_signature: lmots_sig,
+        ots_type: lmots_sig.ots_type,
+        nonce: lmots_sig.nonce,
+        y: lmots_sig.y,
         lms_path: path,
     };
     Ok(signature)
 }
 
-pub fn verify_lms_signature<const N: usize, const P: usize>(
-    tree_height: u8,
+pub fn verify_lms_signature<const N: usize>(
     input_string: &[u8],
-    q: u32,
     lms_public_key: &LmsPublicKey<N>,
-    lms_sig: &LmsSignature<N, P>,
+    lms_sig: &LmsSignature<N>,
 ) -> LMSResult<bool> {
-    let q_str = q.to_be_bytes();
+    let q_str = lms_sig.q.to_be_bytes();
+    let lmots_signature = LmotsSignature {
+        ots_type: lms_sig.ots_type,
+        nonce: lms_sig.nonce,
+        y: lms_sig.y.clone(),
+    };
     let candidate_key = candidate_ots_signature(
         &lms_public_key.lms_identifier,
         &q_str,
-        &lms_sig.lmots_signature,
+        &lmots_signature,
         input_string,
     )?;
-    let mut node_num = (1 << tree_height) + q;
+    let (_, tree_height) = get_lms_parameters(&lms_sig.sig_type).unwrap();
+    let mut node_num = (1 << tree_height) + lms_sig.q;
     let mut hasher = Sha256::new();
     hasher.update(lms_public_key.lms_identifier);
     hasher.update(node_num.to_be_bytes());
@@ -941,12 +1107,14 @@ mod tests {
         let upper_ots = LmotsSignature {
             ots_type: LmotsAlgorithmType::LmotsSha256N32W8,
             nonce: upper_nonce,
-            y,
+            y: y.to_vec(),
         };
 
         let upper_signature = LmsSignature {
             q,
-            lmots_signature: upper_ots,
+            ots_type: upper_ots.ots_type,
+            nonce: upper_ots.nonce,
+            y: upper_ots.y,
             sig_type: LmsAlgorithmType::LmsSha256N32H5,
             lms_path: Vec::from(path),
         };
@@ -958,7 +1126,7 @@ mod tests {
         };
 
         let success =
-            verify_lms_signature(5, &public_buffer, q, &lms_public_key, &upper_signature).unwrap();
+            verify_lms_signature(&public_buffer, &lms_public_key, &upper_signature).unwrap();
         assert!(success);
     }
 
@@ -1200,12 +1368,14 @@ mod tests {
         let final_ots_sig = LmotsSignature {
             ots_type: LmotsAlgorithmType::LmotsSha256N32W8,
             nonce: final_c,
-            y: final_y,
+            y: final_y.to_vec(),
         };
 
         let final_lms_sig = LmsSignature {
             q: lms_q,
-            lmots_signature: final_ots_sig,
+            ots_type: final_ots_sig.ots_type,
+            nonce: final_ots_sig.nonce,
+            y: final_ots_sig.y,
             sig_type: LmsAlgorithmType::LmsSha256N32H5,
             lms_path: Vec::from(final_path),
         };
@@ -1218,7 +1388,7 @@ mod tests {
         };
 
         let final_verification =
-            verify_lms_signature(5, &message, lms_q, &lms_public_key, &final_lms_sig).unwrap();
+            verify_lms_signature(&message, &lms_public_key, &final_lms_sig).unwrap();
         assert!(final_verification);
     }
 
@@ -1460,12 +1630,14 @@ mod tests {
         let final_ots_sig = LmotsSignature {
             ots_type: LmotsAlgorithmType::LmotsSha256N32W8,
             nonce: final_c,
-            y: final_y,
+            y: final_y.to_vec(),
         };
 
         let final_lms_sig = LmsSignature {
             q: lms_q,
-            lmots_signature: final_ots_sig,
+            ots_type: final_ots_sig.ots_type,
+            nonce: final_ots_sig.nonce,
+            y: final_ots_sig.y,
             sig_type: LmsAlgorithmType::LmsSha256N32H5,
             lms_path: Vec::from(final_path),
         };
@@ -1478,8 +1650,8 @@ mod tests {
         };
 
         let final_verification =
-            verify_lms_signature(5, &message, lms_q, &lms_public_key, &final_lms_sig).unwrap();
-        assert_eq!(final_verification, false);
+            verify_lms_signature(&message, &lms_public_key, &final_lms_sig).unwrap();
+        assert!(!final_verification);
     }
 
     #[test]
@@ -1489,7 +1661,7 @@ mod tests {
         let the_ots_type = &LmotsAlgorithmType::LmotsSha256N24W4;
         let (_, tree_height) = get_lms_parameters(the_lms_type).unwrap();
         let (lms_public_key, lms_tree) =
-            create_lms_tree::<24, 51>(the_lms_type, the_ots_type).unwrap();
+            create_lms_tree::<24>(the_lms_type, the_ots_type).unwrap();
 
         let num_keys = 1 << tree_height;
         let mut passed = 0;
@@ -1507,14 +1679,7 @@ mod tests {
             )
             .unwrap();
 
-            let valid = verify_lms_signature(
-                tree_height,
-                message,
-                the_q_to_use,
-                &lms_public_key,
-                &lms_sig,
-            )
-            .unwrap();
+            let valid = verify_lms_signature(message, &lms_public_key, &lms_sig).unwrap();
             if valid {
                 passed += 1;
             }
@@ -1530,7 +1695,7 @@ mod tests {
         let the_ots_type = &LmotsAlgorithmType::LmotsSha256N32W4;
         let (_, tree_height) = get_lms_parameters(the_lms_type).unwrap();
         let (lms_public_key, lms_tree) =
-            create_lms_tree::<32, 67>(the_lms_type, the_ots_type).unwrap();
+            create_lms_tree::<32>(the_lms_type, the_ots_type).unwrap();
 
         let num_keys = 1 << tree_height;
         let mut passed = 0;
@@ -1548,14 +1713,7 @@ mod tests {
             )
             .unwrap();
 
-            let valid = verify_lms_signature(
-                tree_height,
-                message,
-                the_q_to_use,
-                &lms_public_key,
-                &lms_sig,
-            )
-            .unwrap();
+            let valid = verify_lms_signature(message, &lms_public_key, &lms_sig).unwrap();
             if valid {
                 passed += 1;
             }
