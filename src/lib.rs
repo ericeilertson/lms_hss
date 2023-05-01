@@ -187,7 +187,7 @@ pub fn get_lmots_parameters(algo_type: &LmotsAlgorithmType) -> LMSResult<&'stati
             return Ok(i);
         }
     }
-    Err("Its all screwed".to_string())
+    Err("Unable to find the parameters".to_string())
 }
 
 pub fn get_lms_parameters(algo_type: &LmsAlgorithmType) -> LMSResult<(u8, u8)> {
@@ -240,7 +240,7 @@ pub fn lookup_lmots_algorithm_type(alg_value: u32) -> LMSResult<LmotsAlgorithmTy
 
 // follows pseudo code at https://www.rfc-editor.org/rfc/rfc8554#section-3.1.3
 fn coefficient(s: &[u8], i: usize, w: usize) -> u8 {
-    let blah: u16 = (1 << (w)) - 1;
+    let bitmask: u16 = (1 << (w)) - 1;
     let index = i * w / 8;
     let b = s[index];
 
@@ -259,8 +259,8 @@ fn coefficient(s: &[u8], i: usize, w: usize) -> u8 {
     if shift < 8 {
         rs = b >> shift;
     }
-    let small_blah = blah as u8;
-    small_blah & rs
+    let small_bitmask = bitmask as u8;
+    small_bitmask & rs
 }
 
 fn create_lmots_private_key<const N: usize>(
@@ -301,10 +301,10 @@ fn calculate_ots_public_key<const N: usize>(
             hasher.update((i as u16).to_be_bytes());
             hasher.update((j as u8).to_be_bytes());
             hasher.update(tmp);
-            let t_blah = hasher.finalize();
-            let mut blah = [0u8; N];
-            blah[..N].copy_from_slice(&t_blah[..N]);
-            tmp = HashValue::<N>::from(blah);
+            let t_buf = hasher.finalize();
+            let mut buf = [0u8; N];
+            buf[..N].copy_from_slice(&t_buf[..N]);
+            tmp = HashValue::<N>::from(buf);
         }
         y.push(tmp);
     }
@@ -315,10 +315,10 @@ fn calculate_ots_public_key<const N: usize>(
     for t in y {
         hasher.update(t);
     }
-    let t_blah = hasher.finalize();
-    let mut blah = [0u8; N];
-    blah[..N].copy_from_slice(&t_blah[..N]);
-    let return_value = HashValue::<N>::from(blah);
+    let t_buf = hasher.finalize();
+    let mut buf = [0u8; N];
+    buf[..N].copy_from_slice(&t_buf[..N]);
+    let return_value = HashValue::<N>::from(buf);
     Ok(return_value)
 }
 
@@ -362,10 +362,10 @@ pub fn create_lms_tree<const N: usize>(
         hasher.update(r.to_be_bytes());
         hasher.update(D_LEAF.to_be_bytes());
         hasher.update(ots_key);
-        let t_blah = hasher.finalize();
-        let mut blah = [0u8; N];
-        blah[..N].copy_from_slice(&t_blah[..N]);
-        t_tree[initial_offset + offset] = HashValue::<N>::from(blah);
+        let t_buf = hasher.finalize();
+        let mut buf = [0u8; N];
+        buf[..N].copy_from_slice(&t_buf[..N]);
+        t_tree[initial_offset + offset] = HashValue::<N>::from(buf);
     }
     // Now process each layer of tree from the bottom up
     for level in (1..(tree_height + 1)).rev() {
@@ -378,10 +378,10 @@ pub fn create_lms_tree<const N: usize>(
             hasher.update(D_INTR.to_be_bytes());
             hasher.update(t_tree[2 * node_num as usize]);
             hasher.update(t_tree[(2 * node_num) as usize + 1]);
-            let t_blah = hasher.finalize();
-            let mut blah = [0u8; N];
-            blah[..N].copy_from_slice(&t_blah[..N]);
-            t_tree[node_num as usize] = HashValue::<N>::from(blah);
+            let t_buf = hasher.finalize();
+            let mut buf = [0u8; N];
+            buf[..N].copy_from_slice(&t_buf[..N]);
+            t_tree[node_num as usize] = HashValue::<N>::from(buf);
         }
     }
 
@@ -452,10 +452,10 @@ fn lmots_sign_message<const N: usize>(
             hasher.update(i.to_be_bytes());
             hasher.update(j.to_be_bytes());
             hasher.update(tmp);
-            let t_blah = hasher.finalize();
-            let mut blah = [0u8; N];
-            blah[..N].copy_from_slice(&t_blah[..N]);
-            tmp = HashValue::<N>::from(blah);
+            let t_buf = hasher.finalize();
+            let mut buf = [0u8; N];
+            buf[..N].copy_from_slice(&t_buf[..N]);
+            tmp = HashValue::<N>::from(buf);
         }
         y.push(tmp);
     }
@@ -505,10 +505,10 @@ fn candidate_ots_signature<const N: usize>(
             hasher.update(i.to_be_bytes());
             hasher.update(j.to_be_bytes());
             hasher.update(tmp);
-            let t_blah = hasher.finalize();
-            let mut blah = [0u8; N];
-            blah[..N].copy_from_slice(&t_blah[..N]);
-            tmp = HashValue::<N>::from(blah);
+            let t_buf = hasher.finalize();
+            let mut buf = [0u8; N];
+            buf[..N].copy_from_slice(&t_buf[..N]);
+            tmp = HashValue::<N>::from(buf);
         }
         z.push(tmp);
     }
@@ -519,10 +519,10 @@ fn candidate_ots_signature<const N: usize>(
     for t in z {
         hasher.update(t);
     }
-    let t_blah = hasher.finalize();
-    let mut blah = [0u8; N];
-    blah[..N].copy_from_slice(&t_blah[..N]);
-    let result = HashValue::<N>::from(blah);
+    let t_buf = hasher.finalize();
+    let mut buf = [0u8; N];
+    buf[..N].copy_from_slice(&t_buf[..N]);
+    let result = HashValue::<N>::from(buf);
     Ok(result)
 }
 
@@ -557,14 +557,14 @@ pub fn parse_public_contents<const N: usize>(
     let lms_type = lookup_lms_algorithm_type(slice_to_num(
         &public_string[parse_position..parse_position + 4],
     ))
-        .unwrap();
+    .unwrap();
     parse_position += 4;
     println!("Got an LM type of {:?}", lms_type);
 
     let lmots_type = lookup_lmots_algorithm_type(slice_to_num(
         &public_string[parse_position..parse_position + 4],
     ))
-        .unwrap();
+    .unwrap();
     parse_position += 4;
     println!("Got an LMOTS type of {:?}", lmots_type);
 
@@ -588,10 +588,7 @@ pub fn parse_public_contents<const N: usize>(
     Ok(pk)
 }
 
-
-pub fn parse_signature_contents<const N: usize>(
-    signature: &[u8],
-) -> LMSResult<LmsSignature<N>> {
+pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<LmsSignature<N>> {
     println!("Parsing signature contents");
     let mut parse_position = 0;
     /*
@@ -605,10 +602,9 @@ pub fn parse_signature_contents<const N: usize>(
     parse_position += 4;
     println!("Got a Q of {:?}", q);
 
-    let ots_type = lookup_lmots_algorithm_type(slice_to_num(
-        &signature[parse_position..parse_position + 4],
-    ))
-        .unwrap();
+    let ots_type =
+        lookup_lmots_algorithm_type(slice_to_num(&signature[parse_position..parse_position + 4]))
+            .unwrap();
     parse_position += 4;
     println!("Got an OTS type of {:?}", ots_type);
 
@@ -632,10 +628,9 @@ pub fn parse_signature_contents<const N: usize>(
         "About to lookup lms_type for {:?}",
         &signature[parse_position..parse_position + 4]
     );
-    let lms_type = lookup_lms_algorithm_type(slice_to_num(
-        &signature[parse_position..parse_position + 4],
-    ))
-        .unwrap();
+    let lms_type =
+        lookup_lms_algorithm_type(slice_to_num(&signature[parse_position..parse_position + 4]))
+            .unwrap();
     parse_position += 4;
 
     let (hash_width, height) = get_lms_parameters(&lms_type).unwrap();
@@ -663,7 +658,6 @@ pub fn parse_signature_contents<const N: usize>(
     };
     Ok(lms_sig)
 }
-
 
 pub fn lms_sign_message<const N: usize>(
     algo_type: &LmotsAlgorithmType,
@@ -727,10 +721,10 @@ pub fn verify_lms_signature<const N: usize>(
     hasher.update(node_num.to_be_bytes());
     hasher.update(D_LEAF.to_be_bytes());
     hasher.update(candidate_key);
-    let t_blah = hasher.finalize();
-    let mut blah = [0u8; N];
-    blah[..N].copy_from_slice(&t_blah[..N]);
-    let mut temp = HashValue::<N>::from(blah);
+    let t_buf = hasher.finalize();
+    let mut buf = [0u8; N];
+    buf[..N].copy_from_slice(&t_buf[..N]);
+    let mut temp = HashValue::<N>::from(buf);
     let mut i = 0;
     while node_num > 1 {
         if node_num % 2 == 1 {
@@ -740,10 +734,10 @@ pub fn verify_lms_signature<const N: usize>(
             hasher.update(D_INTR.to_be_bytes());
             hasher.update(lms_sig.lms_path[i]);
             hasher.update(temp);
-            let t_blah = hasher.finalize();
-            let mut blah = [0u8; N];
-            blah[..N].copy_from_slice(&t_blah[..N]);
-            temp = HashValue::<N>::from(blah);
+            let t_buf = hasher.finalize();
+            let mut buf = [0u8; N];
+            buf[..N].copy_from_slice(&t_buf[..N]);
+            temp = HashValue::<N>::from(buf);
         } else {
             let mut hasher = Sha256::new();
             hasher.update(lms_public_key.lms_identifier);
@@ -751,10 +745,10 @@ pub fn verify_lms_signature<const N: usize>(
             hasher.update(D_INTR.to_be_bytes());
             hasher.update(temp);
             hasher.update(lms_sig.lms_path[i]);
-            let t_blah = hasher.finalize();
-            let mut blah = [0u8; N];
-            blah[..N].copy_from_slice(&t_blah[..N]);
-            temp = HashValue::<N>::from(blah);
+            let t_buf = hasher.finalize();
+            let mut buf = [0u8; N];
+            buf[..N].copy_from_slice(&t_buf[..N]);
+            temp = HashValue::<N>::from(buf);
         }
         node_num /= 2;
         i += 1;
@@ -1393,6 +1387,29 @@ mod tests {
     }
 
     #[test]
+    fn nist_cavp() {
+        use hex;
+        let nist_public_key_contents: Vec<u8> = hex::decode("0000000A00000006A754FC59A6DB4201BE5DEB20E464D6C1218B33FCB556347070E73394EA6675D1F383F08320475563").unwrap();
+        let nist_message: Vec<u8> = hex::decode("FA2EBE17A797FC981FBD3906BE0049B5D8135840EEA60AEAED7D412741F4B8B411561A278521240BBA6E02B41000992500AD37BF9A25FB15554339CCA3B60622714A075725496310D3F265E9BC602E2649E5DE481729FE18AE4071E931F8FE2058BE143F27E30ADFF54FE9993DA956C72D6BC4A1D75FE186892E3B3029595FBC").unwrap();
+        let nist_signature_contents: Vec<u8> = hex::decode("0000001A00000006969F7094C09F2783F4A5628D6CD620C0FF2DAB69CA4E489BF91AD0C633A7261F7C153704C368FB50A3E8F17F15C2104FE0E0CE5DD5373A792519CA6601D79BB4018D4CDBC4B7BCC0B198C9E84373738543DC6A23F9114404AF17ECD103FA58E4F9DEEB8CDEDCB7D87C51FA905DB1D1011C347CB1C7266462CC88FA2F91EAC87A9C4C585891CC2B0565DBEB2AEE38956B9E650AF2B18D6EC5CE10E3281392388A075FDA8B0EFB610E85652F2AAC3175FAA3F58B78AD355DB7AEC9FD471ED393EA371EF5A37B632BF760C89C2D8B6955577F3ACAFCC83710C76276E09922F762D94BC63F7DFDBCD950BED5EBD88352F6E843D8E0E5C302DECD98B56716C3D07EEF9E28DDF9B6D2EB67BF0B69539FF77860EE4F72FC43997DAB8B602862985E87641B8CBBCB37D171F61398CBD551C9036FD5B17EDAF784015EE2FCA1DB2D5DCFFBAD3AF16CC4C92BBFC7205A4FF793FB1192EF0029602BB6C152B34B1FA2C5DA3F8E348E91A82EA7761D666A3846C96712FB8944830B4921B3EC2654EFFAC36EE8DE6BB4851DD14192A2EE2B97CA0D6126CF8154870932744BB4D5A906881E3A6E01320FC3813F076606A8A0553DB95D3E1D63F52DB3CDC52E3FB1DF2E5DDE718BFBF354059566090D8B5CB5FC6929E691C19724B13D38CE54B45CFBFB87AD2DF84EA8D774FB43BC3C1BCB37C1314F8F8E4557B1ECC74A9B468EE981E49D0CEF647B53B9378868ADBE377805A6D6A30A83926AA65E79973D27618CBFF44628B639D1C01F583A6A2981602DBF5C642295556EB2B0890EBA4B90CDA10615001E0E67A9FBEBAD424728B21290E66B6B6DAB5B391027B26E3B91DE3135F501E793816DBEFD25D527001DA792ADE6DEF9416A11EF11180943E34B2A3E6E86E77414764B879F926699DA6E6371AA5776C7034216ADE57F411486BAB05D4030E56472C087D0D3C755CC47EB312F4D002E966BF2014CAB020642EEC0AFB40731E25CD14CEBD3D748E3E27FE4A53F1033E7F1C64380FA2C77E27A2D7DE1CE3C66159DC564DB80767B006AC92C51C806BB264FAB2C21CC975EE0A4FCC699F6E810EEF04C943398F16AE99AB5827A6E8A05759E0DFB13763E0FA1193FB0EE3ADF39751E295EE0066A87C38DF710E834D12083AC916619C626CADD3BB4FCFD1338BB62058C3DFEAE05D5773FCE2050AA498FAD5BEBE5658C1EB948B6CF8B8ACB03EA214FFCFA52DAEEDF8852D1BAAEF0899A6DEED52B2019DE1CFDB03F905B125C6CA7AECED57F7F5D97280BB041C2A739A5602D13B2B36E98E3F744487FF5E76A8D10EF97589DF92F71346DACBFEF7601F54E7A4AF1979DDD4385ED9DE9949E9222A72BA77D8F71E91BCBA02EB1DF54436415BFAD867D3AC6A53DB926C3054A536731DFC041F799A3715893F12C03505ADD9DFF8D980D762F7F72FB9B13BBCFCBC048304A89EDDC5553C5A3949FA4E65A2F105F9FEA075A8A371FF7CCBA30EBE8850523E04639D8C0F97D84F15691B4822676F23B86D6F52EDBF435DBC6F149D6F3ABBD2D7953A6F1A57FE36C8EDF881C29B306534CE48EA363CAD4512584B8D5C9AD57E37B9258688DA20BAC3127235F10A27DCB854E04A5069AF02D53C2C3EC527A22DB9FDA1D38B5688ADEDE605080BED7EA226C32210E4CEF412FEEC0264D8D5C8C80BF9D81F4F59E6AC0543606E603D35BB86C1D82CF97A109283C87CE7764078FD868661104DABDA80607CFDCE19A5C48ABFC8E53C6040B6C170B6B1B56B9AA2C7F9AA50068615322C27C72A9A7EC88C3FF9BA2DA6B49DE867DFC583E163EC21FCE82495DE9A1E30F69C7CD2735CFA07B9CBA140733C2C14D368F1063CB376B46088420992F8A00B753C42408E77B7DF6A36B4A773BF4F826DD3898B650C6E0AF3C1057CAD4833C3B74362352A11287121DFF52FA6903E8E7FB3E56061BE61CBA90C6B3131E49B5219E637B2E0FF8BFF88B90E8DD242CC92BEE4C8440A86681874A361E2D30A3D3F9EFD078956D30754B7156B50CA3A2303E36EA0946A953D76599D7FB7DCCED424929E63224BCE56F1D0548932F9C28E4F6A7F472ED531DDEDB97524C2E52C95F90A8A4A11EA0A2B894B75C2B20EACB96F8FF961006B9D41EC45F483697215C4CC69FF65A8DA5E9E0EE0B70D47F09D5D769F240FE71381431444A9797D4AAB7784A7A274030E31AED6DA76D839ACB2BC644DC20B231F1562E206B0E0F47C0AB0A20D3D71C26872C9FF6D7B760684BC623AA06AD319D7CC1729825776DB9EE775EFBEE9DC248250D1D860A89284B868F7ED426B62D10981E007B4358DA6D371ADE8F0E0C34241E002BDF85B3F85F6065AFBE31E5D5489FAB1CFAE4D5927045B03989B16466F5EC0BB54AB998D01C935E0C4F28305462ECFF3F551147F974D80012B8F64ECC05919A634C1E403F26D21AC102CA99D5996B6EC74625B6E3384D7122B910CD1A3F1ACEC341D7C38393AAA0068EAA2EF065F2B30B523D474040198C6BF60540B83AFD55F64AA3C252E31DE6B42A7318800BA4B9BD1CF2F19F7CAFFF7E1D75072B28242720729A718E50466F3E3CE3DACFD040965CBB2FCFDE73CCB29B4A6C39C7CEB22F0901CEC5D2807C1648713B210166010923B22917021A4DDCE61EAD3D2F33E739429F1D0A0FF17177EE19101834D95C80921BBCCF39005715F6DBCC1CC89CE33BBCA1026872FE5CBBFD71BEAD408D521A06424377323FDBC6F7EABC9B67D4B6C98DF1EB14A7A077A0FDA6EEA8ACDFE151AE96C8E6A7EF6E3A5EE8CEC7CD5AE389D3DDF386E903E36C167079CFE5BEF24286E9C2AE5BD0173762F0590EE8ADC6284F18CE15B0C4C385057C84E9DFF2ADD8A583407B5EF8C39F76122339136695795588F2C76F4FB59A9C9298B549406214D91001A5B3F9197F9C8FC255B3867FB1528C013649C013CEEF88A64A0FE7982542E9CD3FADB32A7D3B27038817143AC3A297D85A1DEDB32DF18F0F82CE1E14B5132886C3F9F7B192B9038DD300DDE1BCF5C8D25ED9602E62C73002E25D4EDE8B7D192D3B4C5BCB6F92EF50B5D9E11F626650C4E5FEA1F9EE19759902423290385F99897579843EE72FCD44090DBB46E4B7B006AFFA703A6FF2CDFECE60FDBC5447D26FA7DA9F5499D5439C92D32455FBB16AD0913A334E2B66561AEA11A3ABD0D305BB47F0C77C19BD7C504440C5BB78293AC5329C30D2342B47DFDF6D26194CB9C0F62D78F5C9ADD5BB177D7ECF2714BBA6FB0D3D6D9008EC8B4A53327A5B3ED11A5F5BE4EA3FC5BFC3B367111C360D0A8FB8C262CDF5AE9DDCB67577F51643EEB04851161C72AC2E50F63F2D2E1F7A56A402D2F9786481AE67AD8EF494D70B3083ACE490763FE626198F667B1F5A83F2242310267C70722AE3AEA1515F076130411E9F2B2DE76EEA2A4BD8F9034FB2CFC30020B1F080427AFC62F509385EB10559A11FF719E77F4CCC2D223722F2499362DF87FB0000000A5BBA015AE344140386200F1CFB23C96D257A0BC467BCFA59EEC2E7E5D55EA9F7EA8AA7CDD3C09BD4D846E5E3AECC336EE2213A29BE684482EDEB3246C3F09056B3260D9884543047856CE7E2EA0FFCF960B94B702E001FACCE6C90557D2BC72E1D5F67FB4115112CF27D8B8F727A12B788174D40C60BF5A6").unwrap();
+
+        let public_key = parse_public_contents::<24>(&nist_public_key_contents).unwrap();
+        let lms_sig = parse_signature_contents::<24>(&nist_signature_contents).unwrap();
+
+        let blah_sig = LmsSignature {
+            q: lms_sig.q,
+            ots_type: lms_sig.ots_type,
+            nonce: lms_sig.nonce,
+            y: lms_sig.y.to_vec(),
+            sig_type: public_key.lms_type,
+            lms_path: lms_sig.lms_path,
+        };
+
+        let success = verify_lms_signature(&nist_message, &public_key, &blah_sig).unwrap();
+        assert!(success);
+    }
+
+    #[test]
     fn lms_failure() {
         let message: [u8; 162] = [
             0x54, 0x68, 0x65, 0x20, 0x70, 0x6f, 0x77, 0x65, 0x72, 0x73, 0x20, 0x6e, 0x6f, 0x74,
@@ -1660,8 +1677,7 @@ mod tests {
         let the_lms_type = &LmsAlgorithmType::LmsSha256N24H10;
         let the_ots_type = &LmotsAlgorithmType::LmotsSha256N24W4;
         let (_, tree_height) = get_lms_parameters(the_lms_type).unwrap();
-        let (lms_public_key, lms_tree) =
-            create_lms_tree::<24>(the_lms_type, the_ots_type).unwrap();
+        let (lms_public_key, lms_tree) = create_lms_tree::<24>(the_lms_type, the_ots_type).unwrap();
 
         let num_keys = 1 << tree_height;
         let mut passed = 0;
@@ -1694,8 +1710,7 @@ mod tests {
         let the_lms_type = &LmsAlgorithmType::LmsSha256N32H10;
         let the_ots_type = &LmotsAlgorithmType::LmotsSha256N32W4;
         let (_, tree_height) = get_lms_parameters(the_lms_type).unwrap();
-        let (lms_public_key, lms_tree) =
-            create_lms_tree::<32>(the_lms_type, the_ots_type).unwrap();
+        let (lms_public_key, lms_tree) = create_lms_tree::<32>(the_lms_type, the_ots_type).unwrap();
 
         let num_keys = 1 << tree_height;
         let mut passed = 0;

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 sha2 = "0.10.6"
 rand = "0.8.5"
+hex = "0.4"
 
 [profile.dev]
 opt-level=1
