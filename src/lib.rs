@@ -544,40 +544,27 @@ pub fn verify_ots_signature<const N: usize>(
 pub fn parse_public_contents<const N: usize>(
     public_string: &Vec<u8>,
 ) -> LMSResult<LmsPublicKey<N>> {
-    println!("Parsing public contents");
-    println!("Public contents: {:?}", public_string);
     let mut parse_position = 0;
-    /*
-        //when reading from a file the first 4 bytes contain the number of HSS levels
-        let num_levels = slice_to_num(&public_string[parse_position..parse_position + 4]);
-        parse_position += 4;
-        println!("Num levels: {:?}", num_levels);
-    */
 
     let lms_type = lookup_lms_algorithm_type(slice_to_num(
         &public_string[parse_position..parse_position + 4],
     ))
     .unwrap();
     parse_position += 4;
-    println!("Got an LM type of {:?}", lms_type);
 
     let lmots_type = lookup_lmots_algorithm_type(slice_to_num(
         &public_string[parse_position..parse_position + 4],
     ))
     .unwrap();
     parse_position += 4;
-    println!("Got an LMOTS type of {:?}", lmots_type);
 
     let mut lms_identifier = [0u8; 16];
     lms_identifier.copy_from_slice(&public_string[parse_position..parse_position + 16]);
     parse_position += 16;
-    println!("Got an LMS identifier of {:?}", lms_identifier);
 
     let mut temp = [0u8; N];
     temp.copy_from_slice(&public_string[parse_position..parse_position + N]);
-    //parse_position += N;
     let public_hash = HashValue::<N>::from(temp);
-    println!("Got a public hash of {:?}", public_hash);
 
     let pk = LmsPublicKey {
         lms_type,
@@ -589,29 +576,18 @@ pub fn parse_public_contents<const N: usize>(
 }
 
 pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<LmsSignature<N>> {
-    println!("Parsing signature contents");
     let mut parse_position = 0;
-    /*
-        // when reading from a file the first 4 bytes contain the number of HSS levels
-        let num_levels = slice_to_num(&signature[parse_position..parse_position + 4]) + 1;
-        parse_position += 4;
-        println!("Num levels: {:?}", num_levels);
-    */
-
     let q = slice_to_num(&signature[parse_position..parse_position + 4]);
     parse_position += 4;
-    println!("Got a Q of {:?}", q);
 
     let ots_type =
         lookup_lmots_algorithm_type(slice_to_num(&signature[parse_position..parse_position + 4]))
             .unwrap();
     parse_position += 4;
-    println!("Got an OTS type of {:?}", ots_type);
 
     let mut nonce = [0u8; N];
     nonce.copy_from_slice(&signature[parse_position..parse_position + N]);
     parse_position += N;
-    println!("Got a nonce of {:?}", nonce);
 
     let lmots_params = get_lmots_parameters(&ots_type).unwrap();
 
@@ -622,12 +598,6 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
         y.push(HashValue::<N>::from(tmp));
         parse_position += N;
     }
-    println!("Got a signature of size: {:?}", y.len(),);
-
-    println!(
-        "About to lookup lms_type for {:?}",
-        &signature[parse_position..parse_position + 4]
-    );
     let lms_type =
         lookup_lms_algorithm_type(slice_to_num(&signature[parse_position..parse_position + 4]))
             .unwrap();
@@ -637,7 +607,6 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
     if N != hash_width as usize {
         return Err("Hash sizes do not match".to_string());
     }
-    println!("Expect params of {:?}", lmots_params);
 
     let mut path = vec![];
     for _ in 0..height {
@@ -646,8 +615,6 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
         path.push(HashValue::<N>::from(tmp));
         parse_position += N;
     }
-    println!("Got a path of {:?}", path);
-    println!("Length of path: {:?}", path.len());
     let lms_sig = LmsSignature {
         q,
         ots_type,
@@ -1396,7 +1363,7 @@ mod tests {
         let public_key = parse_public_contents::<24>(&nist_public_key_contents).unwrap();
         let lms_sig = parse_signature_contents::<24>(&nist_signature_contents).unwrap();
 
-        let blah_sig = LmsSignature {
+        let full_sig = LmsSignature {
             q: lms_sig.q,
             ots_type: lms_sig.ots_type,
             nonce: lms_sig.nonce,
@@ -1405,7 +1372,7 @@ mod tests {
             lms_path: lms_sig.lms_path,
         };
 
-        let success = verify_lms_signature(&nist_message, &public_key, &blah_sig).unwrap();
+        let success = verify_lms_signature(&nist_message, &public_key, &full_sig).unwrap();
         assert!(success);
     }
 
