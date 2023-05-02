@@ -547,8 +547,7 @@ pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<
     let lms_type = lookup_lms_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
     pos += 4;
 
-    let lmots_type =
-        lookup_lmots_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
+    let lmots_type = lookup_lmots_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
     pos += 4;
 
     let mut lms_identifier = [0u8; 16];
