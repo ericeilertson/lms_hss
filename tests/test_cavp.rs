@@ -82,7 +82,7 @@ fn test_cavp_32() {
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
             let lms_sig_result = lms_hss::parse_signature_contents::<32>(&sig);
-            if lms_sig_result.is_err() {
+            if let Err(..) = lms_sig_result {
                 if !t.testPassed {
                     passed += 1;
                     continue;
@@ -136,7 +136,7 @@ fn test_cavp_24() {
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
             let lms_sig_result = lms_hss::parse_signature_contents::<24>(&sig);
-            if lms_sig_result.is_err() {
+            if let Err(..) = lms_sig_result {
                 if !t.testPassed {
                     passed += 1;
                     continue;
