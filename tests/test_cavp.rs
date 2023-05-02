@@ -98,7 +98,7 @@ fn test_cavp_32() {
                     &pub_key,
                     &lms_sig,
                 );
-                if success_result.is_err() {
+                if let Err(..) = success_result {
                     if !t.testPassed {
                         passed += 1;
                         continue;
@@ -152,7 +152,7 @@ fn test_cavp_24() {
                     &pub_key,
                     &lms_sig,
                 );
-                if success_result.is_err() {
+                if let Err(..) = success_result {
                     if !t.testPassed {
                         passed += 1;
                         continue;
