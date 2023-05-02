@@ -544,11 +544,11 @@ pub fn verify_ots_signature<const N: usize>(
 pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<LmsPublicKey<N>> {
     let mut pos = 0;
 
-    let lms_type = lookup_lms_algorithm_type(slice_to_num(&public_string[pos..pos + 4])).unwrap();
+    let lms_type = lookup_lms_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
     pos += 4;
 
     let lmots_type =
-        lookup_lmots_algorithm_type(slice_to_num(&public_string[pos..pos + 4])).unwrap();
+        lookup_lmots_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
     pos += 4;
 
     let mut lms_identifier = [0u8; 16];
@@ -573,14 +573,14 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
     let q = slice_to_num(&signature[pos..pos + 4]);
     pos += 4;
 
-    let ots_type = lookup_lmots_algorithm_type(slice_to_num(&signature[pos..pos + 4])).unwrap();
+    let ots_type = lookup_lmots_algorithm_type(slice_to_num(&signature[pos..pos + 4]))?;
     pos += 4;
 
     let mut nonce = [0u8; N];
     nonce.copy_from_slice(&signature[pos..pos + N]);
     pos += N;
 
-    let lmots_params = get_lmots_parameters(&ots_type).unwrap();
+    let lmots_params = get_lmots_parameters(&ots_type)?;
 
     let mut y = vec![];
     for _ in 0..lmots_params.p {
@@ -589,12 +589,16 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
         y.push(HashValue::<N>::from(tmp));
         pos += N;
     }
-    let lms_type = lookup_lms_algorithm_type(slice_to_num(&signature[pos..pos + 4])).unwrap();
+    let lms_type = lookup_lms_algorithm_type(slice_to_num(&signature[pos..pos + 4]))?;
     pos += 4;
 
-    let (hash_width, height) = get_lms_parameters(&lms_type).unwrap();
+    let (hash_width, height) = get_lms_parameters(&lms_type)?;
     if N != hash_width as usize {
         return Err("Hash sizes do not match".to_string());
+    }
+
+    if (height as usize * N) + pos > signature.len() {
+        return Err("Signature is too short".to_string());
     }
 
     let mut path = vec![];
@@ -609,8 +613,8 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
         ots_type,
         nonce,
         y,
-        lms_type: lms_type,
-        path: path,
+        lms_type,
+        path,
     };
     Ok(lms_sig)
 }
@@ -648,7 +652,7 @@ pub fn lms_sign_message<const N: usize>(
         ots_type: lmots_sig.ots_type,
         nonce: lmots_sig.nonce,
         y: lmots_sig.y,
-        path: path,
+        path,
     };
     Ok(signature)
 }
@@ -670,8 +674,11 @@ pub fn verify_lms_signature<const N: usize>(
         &lmots_signature,
         input_string,
     )?;
-    let (_, tree_height) = get_lms_parameters(&lms_sig.lms_type).unwrap();
+    let (_, tree_height) = get_lms_parameters(&lms_sig.lms_type)?;
     let mut node_num = (1 << tree_height) + lms_sig.q;
+    if node_num > 2 << tree_height {
+        return Err("Invalid node number".to_string());
+    }
     let mut hasher = Sha256::new();
     hasher.update(lms_public_key.lms_identifier);
     hasher.update(node_num.to_be_bytes());
