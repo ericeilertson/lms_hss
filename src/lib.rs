@@ -542,8 +542,10 @@ pub fn verify_ots_signature<const N: usize>(
 }
 
 pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<LmsPublicKey<N>> {
+    if public_string.len() != (24 + N) {
+        return Err("Public key string is the wrong size".to_string());
+    }
     let mut pos = 0;
-
     let lms_type = lookup_lms_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
     pos += 4;
 
@@ -568,18 +570,25 @@ pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<
 }
 
 pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<LmsSignature<N>> {
+    if signature.len() < 8 {
+        return Err("Signature string is too short".to_string());
+    }
     let mut pos = 0;
     let q = slice_to_num(&signature[pos..pos + 4]);
     pos += 4;
 
     let ots_type = lookup_lmots_algorithm_type(slice_to_num(&signature[pos..pos + 4]))?;
     pos += 4;
+    let lmots_params = get_lmots_parameters(&ots_type)?;
+
+    let signature_size_before_path = 8 + N + (lmots_params.p as usize * N) + 4;
+    if signature.len() < signature_size_before_path {
+        return Err("Signature string is too short".to_string());
+    }
 
     let mut nonce = [0u8; N];
     nonce.copy_from_slice(&signature[pos..pos + N]);
     pos += N;
-
-    let lmots_params = get_lmots_parameters(&ots_type)?;
 
     let mut y = vec![];
     for _ in 0..lmots_params.p {

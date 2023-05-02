@@ -44,7 +44,6 @@ fn test_cavp_32() {
     for tg in suite.testGroups {
         let pub_key =
             lms_hss::parse_public_contents::<32>(&hex::decode(tg.publicKey).unwrap()).unwrap();
-        let mut failed = 0;
         let mut passed = 0;
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
@@ -55,7 +54,6 @@ fn test_cavp_32() {
                     continue;
                 } else {
                     println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                    failed += 1;
                     continue;
                 }
             } else {
@@ -71,21 +69,18 @@ fn test_cavp_32() {
                         continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        failed += 1;
                         continue;
                     }
                 } else {
                     let success = success_result.unwrap();
                     if success != t.testPassed {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        failed += 1;
                     } else {
                         passed += 1;
                     }
                 }
             }
         }
-        println!("passed: {} failed: {} in tg {}", passed, failed, tg.tgId);
         assert_eq!(passed, tg.tests.len());
     }
 }
@@ -98,7 +93,6 @@ fn test_cavp_24() {
     for tg in suite.testGroups {
         let pub_key =
             lms_hss::parse_public_contents::<24>(&hex::decode(tg.publicKey).unwrap()).unwrap();
-        let mut failed = 0;
         let mut passed = 0;
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
@@ -109,7 +103,6 @@ fn test_cavp_24() {
                     continue;
                 } else {
                     println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                    failed += 1;
                     continue;
                 }
             } else {
@@ -125,21 +118,18 @@ fn test_cavp_24() {
                         continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        failed += 1;
                         continue;
                     }
                 } else {
                     let success = success_result.unwrap();
                     if success != t.testPassed {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        failed += 1;
                     } else {
                         passed += 1;
                     }
                 }
             }
         }
-        println!("passed: {} failed: {} in tg {}", passed, failed, tg.tgId);
         assert_eq!(passed, tg.tests.len());
     }
 }

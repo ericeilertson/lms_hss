@@ -62,5 +62,5 @@ fn test_many_32() {
         }
         assert!(valid);
     }
-    println!("{} out of {} signatures matched", passed, num_keys);
+    assert_eq!(passed, num_keys);
 }
