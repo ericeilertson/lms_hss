@@ -14,7 +14,6 @@ fn main() {
             the_ots_type,
             the_lms_type,
             message,
-            tree_height,
             &lms_tree.private_keys[the_q_to_use as usize].clone(),
             the_q_to_use,
             &lms_tree,

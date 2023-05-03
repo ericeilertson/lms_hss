@@ -239,9 +239,16 @@ pub fn lookup_lmots_algorithm_type(alg_value: u32) -> LMSResult<LmotsAlgorithmTy
 }
 
 // follows pseudo code at https://www.rfc-editor.org/rfc/rfc8554#section-3.1.3
-fn coefficient(s: &[u8], i: usize, w: usize) -> u8 {
+fn coefficient(s: &[u8], i: usize, w: usize) -> LMSResult<u8> {
+    let valid_w = matches!(w, 1 | 2 | 4 | 8);
+    if !valid_w {
+        return Err("Invalid w value".to_string());
+    }
     let bitmask: u16 = (1 << (w)) - 1;
     let index = i * w / 8;
+    if index >= s.len() {
+        return Err("Index out of bounds".to_string());
+    }
     let b = s[index];
 
     // extra logic to avoid the divide by 0
@@ -260,7 +267,7 @@ fn coefficient(s: &[u8], i: usize, w: usize) -> u8 {
         rs = b >> shift;
     }
     let small_bitmask = bitmask as u8;
-    small_bitmask & rs
+    Ok(small_bitmask & rs)
 }
 
 fn create_lmots_private_key<const N: usize>(
@@ -341,7 +348,9 @@ pub fn create_lms_tree<const N: usize>(
     ots_type: &LmotsAlgorithmType,
 ) -> LMSResult<(LmsPublicKey<N>, LmsTree<N>)> {
     let (hash_size, tree_height) = get_lms_parameters(lms_type)?;
-    assert_eq!(hash_size as usize, N);
+    if hash_size as usize != N {
+        return Err("Hash size does not match".to_string());
+    }
     let num_nodes = 1 << (tree_height + 1); // we will instantiate an array to store the entire tree
     let mut t_tree = vec![HashValue::<N>::default(); num_nodes]; // the tree root will be at t_tree[1]
     let (lms_identifier, initial_q, private_keys) = create_lms_private_keys(tree_height, ots_type)?;
@@ -406,7 +415,7 @@ fn checksum(algo_type: &LmotsAlgorithmType, input_string: &[u8]) -> LMSResult<u1
     let upper_bound = params.n as u16 * (8 / params.w as u16);
     for i in 0..upper_bound {
         sum = sum + ((1 << params.w) - 1)
-            - (coefficient(input_string, i as usize, params.w as usize) as u16);
+            - (coefficient(input_string, i as usize, params.w as usize)? as u16);
     }
     Ok(sum << params.ls)
 }
@@ -443,7 +452,7 @@ fn lmots_sign_message<const N: usize>(
     message_hash_with_checksum[N + 1] = be_checksum[1];
 
     for i in 0..params.p {
-        let a = coefficient(&message_hash_with_checksum, i as usize, params.w as usize);
+        let a = coefficient(&message_hash_with_checksum, i as usize, params.w as usize)?;
         let mut tmp = private_key[i as usize];
         for j in 0..a {
             let mut hasher = Sha256::new();
@@ -494,7 +503,7 @@ fn candidate_ots_signature<const N: usize>(
     message_hash_with_checksum[N + 1] = be_checksum[1];
 
     for i in 0..params.p {
-        let a = coefficient(&message_hash_with_checksum, i as usize, params.w as usize);
+        let a = coefficient(&message_hash_with_checksum, i as usize, params.w as usize)?;
         let mut tmp = signature.y[i as usize];
         let t_upper: u16 = (1 << params.w) - 1; // subtract with overflow?
         let upper = t_upper as u8;
@@ -552,6 +561,13 @@ pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<
     let lmots_type = lookup_lmots_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
     pos += 4;
 
+    let (hash_width, _) = get_lms_parameters(&lms_type)?;
+    if hash_width as usize != N {
+        return Err(
+            "Hash width specified in the LMS type does not match the const N provided".to_string(),
+        );
+    }
+
     let mut lms_identifier = [0u8; 16];
     lms_identifier.copy_from_slice(&public_string[pos..pos + 16]);
     pos += 16;
@@ -580,6 +596,9 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
     let ots_type = lookup_lmots_algorithm_type(slice_to_num(&signature[pos..pos + 4]))?;
     pos += 4;
     let lmots_params = get_lmots_parameters(&ots_type)?;
+    if lmots_params.n as usize != N {
+        return Err("LMOTS hash width does not match the const parameter provided".to_string());
+    }
 
     let signature_size_before_path = 8 + N + (lmots_params.p as usize * N) + 4;
     if signature.len() < signature_size_before_path {
@@ -631,18 +650,20 @@ pub fn lms_sign_message<const N: usize>(
     algo_type: &LmotsAlgorithmType,
     lms_algorithm: &LmsAlgorithmType,
     input_string: &[u8],
-    tree_height: u8,
     private_key: &Vec<HashValue<N>>,
     q: u32,
     lms_tree: &LmsTree<N>,
 ) -> LMSResult<LmsSignature<N>> {
-    let q_str = q.to_be_bytes();
+    let (_, tree_height) = get_lms_parameters(lms_algorithm)?;
+    if q >= (1 << tree_height) {
+        return Err("q is too large".to_string());
+    }
     let lmots_sig = lmots_sign_message(
         algo_type,
         input_string,
         private_key,
         &lms_tree.lms_identifier,
-        &q_str,
+        &q.to_be_bytes(),
     )?;
     let mut path = vec![];
 
@@ -670,7 +691,11 @@ pub fn verify_lms_signature<const N: usize>(
     lms_public_key: &LmsPublicKey<N>,
     lms_sig: &LmsSignature<N>,
 ) -> LMSResult<bool> {
-    let q_str = lms_sig.q.to_be_bytes();
+    let (_, tree_height) = get_lms_parameters(&lms_sig.lms_type)?;
+    let mut node_num = (1 << tree_height) + lms_sig.q;
+    if node_num > 2 << tree_height {
+        return Err("Invalid node number".to_string());
+    }
     let lmots_signature = LmotsSignature {
         ots_type: lms_sig.ots_type,
         nonce: lms_sig.nonce,
@@ -678,15 +703,11 @@ pub fn verify_lms_signature<const N: usize>(
     };
     let candidate_key = candidate_ots_signature(
         &lms_public_key.lms_identifier,
-        &q_str,
+        &lms_sig.q.to_be_bytes(),
         &lmots_signature,
         input_string,
     )?;
-    let (_, tree_height) = get_lms_parameters(&lms_sig.lms_type)?;
-    let mut node_num = (1 << tree_height) + lms_sig.q;
-    if node_num > 2 << tree_height {
-        return Err("Invalid node number".to_string());
-    }
+
     let mut hasher = Sha256::new();
     hasher.update(lms_public_key.lms_identifier);
     hasher.update(node_num.to_be_bytes());
@@ -784,10 +805,10 @@ mod tests {
     #[test]
     fn test_coefficient() {
         let input_value = [0x12u8, 0x34u8];
-        let result = coefficient(&input_value, 7, 1);
+        let result = coefficient(&input_value, 7, 1).unwrap();
         assert_eq!(result, 0);
 
-        let result = coefficient(&input_value, 0, 4);
+        let result = coefficient(&input_value, 0, 4).unwrap();
         assert_eq!(result, 1);
     }
 
