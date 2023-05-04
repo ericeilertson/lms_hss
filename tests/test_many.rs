@@ -81,7 +81,7 @@ fn test_combinations_32() {
     ];
     for lms_type in lms_types.iter() {
         for ots_type in ots_types.iter() {
-            println!("Testing lms_type {:?} ots_type {:?}", lms_type, ots_type);
+            //println!("Testing lms_type {:?} ots_type {:?}", lms_type, ots_type);
             //let (_, tree_height) = lms_hss::get_lms_parameters(lms_type).unwrap();
             let (lms_public_key, lms_tree) =
                 lms_hss::create_lms_tree::<32>(lms_type, ots_type).unwrap();
@@ -131,7 +131,7 @@ fn test_combinations_24() {
     ];
     for lms_type in lms_types.iter() {
         for ots_type in ots_types.iter() {
-            println!("Testing lms_type {:?} ots_type {:?}", lms_type, ots_type);
+            //println!("Testing lms_type {:?} ots_type {:?}", lms_type, ots_type);
             //let (_, tree_height) = lms_hss::get_lms_parameters(lms_type).unwrap();
             let (lms_public_key, lms_tree) =
                 lms_hss::create_lms_tree::<24>(lms_type, ots_type).unwrap();
