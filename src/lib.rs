@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn lookup_lms_alg_test() {
-        for value in 5..15 as u32 {
+        for value in 5..15 {
             assert!(lookup_lms_algorithm_type(value).is_ok());
         }
         assert!(lookup_lms_algorithm_type(0).is_err());
@@ -865,7 +865,7 @@ mod tests {
 
     #[test]
     fn lookup_lmots_alg_test() {
-        for value in 1..9 as u32 {
+        for value in 1..9 {
             assert!(lookup_lmots_algorithm_type(value).is_ok());
         }
         assert!(lookup_lmots_algorithm_type(0).is_err());
