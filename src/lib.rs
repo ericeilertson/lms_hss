@@ -695,7 +695,10 @@ pub fn verify_lms_signature<const N: usize>(
     lms_public_key: &LmsPublicKey<N>,
     lms_sig: &LmsSignature<N>,
 ) -> LMSResult<bool> {
-    let (_, tree_height) = get_lms_parameters(&lms_sig.lms_type)?;
+    let (hash_width, tree_height) = get_lms_parameters(&lms_sig.lms_type)?;
+    if hash_width as usize != N {
+        return Err("Hash width does not match".to_string());
+    }
     let mut node_num = (1 << tree_height) + lms_sig.q;
     if node_num > 2 << tree_height {
         return Err("Invalid node number".to_string());
