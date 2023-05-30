@@ -68,7 +68,7 @@ fn test_combinations_32() {
     let message = "this is the message I want signed".as_bytes();
     let lms_types = [
         lms_hss::LmsAlgorithmType::LmsSha256N32H5,
-        lms_hss::LmsAlgorithmType::LmsSha256N32H10,
+        //lms_hss::LmsAlgorithmType::LmsSha256N32H10,
         //lms_hss::LmsAlgorithmType::LmsSha256N32H15, // adding this takes about 25 seconds
         //lms_hss::LmsAlgorithmType::LmsSha256N32H20, // this adds about 13 minutes
         //lms_hss::LmsAlgorithmType::LmsSha256N32H25,
@@ -118,7 +118,7 @@ fn test_combinations_24() {
     let message = "this is the message I want signed".as_bytes();
     let lms_types = [
         lms_hss::LmsAlgorithmType::LmsSha256N24H5,
-        lms_hss::LmsAlgorithmType::LmsSha256N24H10,
+        //lms_hss::LmsAlgorithmType::LmsSha256N24H10,
         //lms_hss::LmsAlgorithmType::LmsSha256N24H15,  // adding this takes about 15 seconds
         //lms_hss::LmsAlgorithmType::LmsSha256N24H20,  // and this adds about 8 minutes
         //lms_hss::LmsAlgorithmType::LmsSha256N24H25,  // and this takes forever

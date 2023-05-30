@@ -329,7 +329,7 @@ fn calculate_ots_public_key<const N: usize>(
     Ok(return_value)
 }
 
-// this is copied derived from section 5.2 of rfc 8554
+// this is derived from section 5.2 of rfc 8554
 fn create_lms_private_keys<const N: usize>(
     tree_height: u8,
     ots_type: &LmotsAlgorithmType,
@@ -411,6 +411,10 @@ pub fn create_lms_tree<const N: usize>(
 
 fn checksum(algo_type: &LmotsAlgorithmType, input_string: &[u8]) -> LMSResult<u16> {
     let params = get_lmots_parameters(algo_type)?;
+    let valid_w = matches!(params.w, 1 | 2 | 4 | 8);
+    if !valid_w {
+        return Err("Invalid w value".to_string());
+    }
     let mut sum = 0u16;
     let upper_bound = params.n as u16 * (8 / params.w as u16);
     for i in 0..upper_bound {
@@ -810,6 +814,10 @@ mod tests {
 
         let result = coefficient(&input_value, 0, 4).unwrap();
         assert_eq!(result, 1);
+        // test out of bounds
+        assert!(coefficient(&input_value, 20, 4).is_err());
+        //test invalid w valid
+        assert!(coefficient(&input_value, 0, 3).is_err());
     }
 
     #[test]
@@ -844,6 +852,24 @@ mod tests {
         let (n, h) = get_lms_parameters(&LmsAlgorithmType::LmsSha256N24H25).unwrap();
         assert_eq!(n, 24);
         assert_eq!(h, 25);
+    }
+
+    #[test]
+    fn lookup_lms_alg_test() {
+        for value in 5..15 as u32 {
+            assert!(lookup_lms_algorithm_type(value).is_ok());
+        }
+        assert!(lookup_lms_algorithm_type(0).is_err());
+        assert!(lookup_lms_algorithm_type(16).is_err());
+    }
+
+    #[test]
+    fn lookup_lmots_alg_test() {
+        for value in 1..9 as u32 {
+            assert!(lookup_lmots_algorithm_type(value).is_ok());
+        }
+        assert!(lookup_lmots_algorithm_type(0).is_err());
+        assert!(lookup_lmots_algorithm_type(9).is_err());
     }
 
     #[test]
