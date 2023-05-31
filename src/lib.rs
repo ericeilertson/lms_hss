@@ -296,7 +296,9 @@ fn calculate_ots_public_key<const N: usize>(
     x: &[HashValue<N>],
 ) -> LMSResult<HashValue<N>> {
     let params = get_lmots_parameters(algo_type)?;
-    assert_eq!(params.n as usize, N);
+    if params.n as usize != N {
+        return Err("Error generating public key, mismatched N".to_string());
+    }
     let mut y = vec![];
     for (i, xi) in x.iter().enumerate() {
         let mut tmp = *xi;
@@ -432,13 +434,17 @@ fn lmots_sign_message<const N: usize>(
     q: &[u8; 4],
 ) -> LMSResult<LmotsSignature<N>> {
     let params = get_lmots_parameters(algo_type)?;
-    assert_eq!(params.n as usize, N);
+    if params.n as usize != N {
+        return Err("Hash size does not match N".to_string());
+    }
     let nonce_t: [u8; 32] = random(); // in the RFC this is the C value
     let mut nonce = [0u8; N];
     nonce[..N].copy_from_slice(&nonce_t[..N]);
 
     let mut y = vec![];
-    assert_eq!(private_key.len(), params.p as usize);
+    if params.p as usize != private_key.len() {
+        return Err("Private key length does not match".to_string());
+    }
     let mut hasher = Sha256::new();
     hasher.update(lms_identifier);
     hasher.update(q);
@@ -488,7 +494,9 @@ fn candidate_ots_signature<const N: usize>(
     message: &[u8],
 ) -> LMSResult<HashValue<N>> {
     let params = get_lmots_parameters(&signature.ots_type)?;
-    assert!(params.n < 33);
+    if params.n > 32 {
+        return Err("Hash size too large".to_string());
+    }
     let mut hasher = Sha256::new();
     let mut z = vec![];
     hasher.update(lms_identifier);

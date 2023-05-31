@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 sha2 = "0.10.6"
 rand = "0.8.5"
+proptest = "1.1.0"
 
 [dev-dependencies]
 # these are needed for the cavp tests
