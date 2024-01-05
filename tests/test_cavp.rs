@@ -42,8 +42,10 @@ fn test_cavp_32() {
         fs::read_to_string("tests/cavp_32.json").expect("Should have been able to read the file");
     let suite: LmsCavpSuite = serde_json::from_str(&contents).unwrap();
     for tg in suite.testGroups {
-        let pub_key =
-            lms_hss::parse_public_contents::<32>(&hex::decode(tg.publicKey).unwrap()).unwrap();
+        let public_key_bytes = hex::decode(&tg.publicKey).unwrap();
+        let pub_key = lms_hss::parse_public_contents::<32>(&public_key_bytes).unwrap();
+        let serialized_pub_key = lms_hss::serialize_public_key(&pub_key);
+        assert_eq!(serialized_pub_key, public_key_bytes);
         let mut passed = 0;
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
@@ -91,8 +93,12 @@ fn test_cavp_24() {
         fs::read_to_string("tests/cavp_24.json").expect("Should have been able to read the file");
     let suite: LmsCavpSuite = serde_json::from_str(&contents).unwrap();
     for tg in suite.testGroups {
+        let pk_contents = hex::decode(&tg.publicKey).unwrap();
         let pub_key =
             lms_hss::parse_public_contents::<24>(&hex::decode(tg.publicKey).unwrap()).unwrap();
+        let serialized = lms_hss::serialize_public_key::<24>(&pub_key);
+        assert_eq!(serialized, pk_contents);
+
         let mut passed = 0;
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
@@ -107,6 +113,8 @@ fn test_cavp_24() {
                 }
             } else {
                 let lms_sig = lms_sig_result.unwrap();
+                let serialized = lms_hss::serialize_signature::<24>(&lms_sig);
+                assert_eq!(serialized, sig);
                 let success_result = lms_hss::verify_lms_signature(
                     &hex::decode(&t.message).unwrap(),
                     &pub_key,

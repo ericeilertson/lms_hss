@@ -1,5 +1,6 @@
 use rand::random;
 use sha2::{Digest, Sha256};
+use std::fmt;
 
 const D_PBLC: u16 = 0x8080;
 const D_MESG: u16 = 0x8181;
@@ -35,6 +36,16 @@ impl From<[u8; 32]> for HashValue<24> {
 impl<const N: usize> AsRef<[u8]> for HashValue<N> {
     fn as_ref(&self) -> &[u8] {
         &self.0
+    }
+}
+impl<const N: usize> fmt::Display for HashValue<N> {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        write!(f, "{:?}", self.0)
     }
 }
 
@@ -239,7 +250,7 @@ pub fn lookup_lmots_algorithm_type(alg_value: u32) -> LMSResult<LmotsAlgorithmTy
 }
 
 // follows pseudo code at https://www.rfc-editor.org/rfc/rfc8554#section-3.1.3
-fn coefficient(s: &[u8], i: usize, w: usize) -> LMSResult<u8> {
+pub fn coefficient(s: &[u8], i: usize, w: usize) -> LMSResult<u8> {
     let valid_w = matches!(w, 1 | 2 | 4 | 8);
     if !valid_w {
         return Err("Invalid w value".to_string());
@@ -550,6 +561,17 @@ pub fn verify_ots_signature<const N: usize>(
     Ok(true)
 }
 
+pub fn serialize_public_key<const N: usize>(public_key: &LmsPublicKey<N>) -> Vec<u8> {
+    let mut result = vec![];
+    result.extend_from_slice(&(public_key.lms_type as u32).to_be_bytes());
+    result.extend_from_slice(&(public_key.lmots_type as u32).to_be_bytes());
+    result.extend_from_slice(&public_key.lms_identifier);
+    for h in public_key.root_hash.0.iter() {
+        result.push(*h);
+    }
+    result
+}
+
 pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<LmsPublicKey<N>> {
     if public_string.len() != (24 + N) {
         return Err("Public key string is the wrong size".to_string());
@@ -583,6 +605,25 @@ pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<
         root_hash: public_hash,
     };
     Ok(pk)
+}
+
+pub fn serialize_signature<const N: usize>(signature: &LmsSignature<N>) -> Vec<u8> {
+    let mut result = vec![];
+    result.extend_from_slice(&(signature.q).to_be_bytes());
+    result.extend_from_slice(&(signature.ots_type as u32).to_be_bytes());
+    result.extend_from_slice(&signature.nonce);
+    for h in signature.y.iter() {
+        for b in h.0.iter() {
+            result.push(*b);
+        }
+    }
+    result.extend_from_slice(&(signature.lms_type as u32).to_be_bytes());
+    for h in signature.path.iter() {
+        for b in h.0.iter() {
+            result.push(*b);
+        }
+    }
+    result
 }
 
 pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<LmsSignature<N>> {
