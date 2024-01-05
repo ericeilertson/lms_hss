@@ -550,6 +550,17 @@ pub fn verify_ots_signature<const N: usize>(
     Ok(true)
 }
 
+pub fn serialize_public_key<const N: usize>(public_key: &LmsPublicKey<N>) -> Vec<u8> {
+    let mut result = vec![];
+    result.extend_from_slice(&(public_key.lms_type as u32).to_be_bytes());
+    result.extend_from_slice(&(public_key.lmots_type as u32).to_be_bytes());
+    result.extend_from_slice(&public_key.lms_identifier);
+    for h in public_key.root_hash.0.iter() {
+        result.push(*h);
+    }
+    result
+}
+
 pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<LmsPublicKey<N>> {
     if public_string.len() != (24 + N) {
         return Err("Public key string is the wrong size".to_string());
@@ -584,6 +595,26 @@ pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<
     };
     Ok(pk)
 }
+
+pub fn serialize_signature<const N: usize>(signature: &LmsSignature<N>) -> Vec<u8> {
+    let mut result = vec![];
+    result.extend_from_slice(&(signature.q).to_be_bytes());
+    result.extend_from_slice(&(signature.ots_type as u32).to_be_bytes());
+    result.extend_from_slice(&signature.nonce);
+    for h in signature.y.iter() {
+        for b in h.0.iter() {
+            result.push(*b);
+        }
+    }
+    result.extend_from_slice(&(signature.lms_type as u32).to_be_bytes());
+    for h in signature.path.iter() {
+        for b in h.0.iter() {
+            result.push(*b);
+        }
+    }
+    result
+}
+
 
 pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<LmsSignature<N>> {
     if signature.len() < 8 {
