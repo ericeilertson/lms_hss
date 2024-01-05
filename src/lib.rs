@@ -615,7 +615,6 @@ pub fn serialize_signature<const N: usize>(signature: &LmsSignature<N>) -> Vec<u
     result
 }
 
-
 pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<LmsSignature<N>> {
     if signature.len() < 8 {
         return Err("Signature string is too short".to_string());
