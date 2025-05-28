@@ -423,7 +423,7 @@ fn checksum(algo_type: &LmotsAlgorithmType, input_string: &[u8]) -> LMSResult<u1
 fn lmots_sign_message<const N: usize>(
     algo_type: &LmotsAlgorithmType,
     input_string: &[u8],
-    private_key: &Vec<HashValue<N>>,
+    private_key: &[HashValue<N>],
     lms_identifier: &LmsIdentifier,
     q: &[u8; 4],
 ) -> LMSResult<LmotsSignature<N>> {
@@ -680,7 +680,7 @@ pub fn lms_sign_message<const N: usize>(
     algo_type: &LmotsAlgorithmType,
     lms_algorithm: &LmsAlgorithmType,
     input_string: &[u8],
-    private_key: &Vec<HashValue<N>>,
+    private_key: &[HashValue<N>],
     q: u32,
     lms_tree: &LmsTree<N>,
 ) -> LMSResult<LmsSignature<N>> {
