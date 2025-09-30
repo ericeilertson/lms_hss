@@ -95,7 +95,7 @@ fn main() {
             ) {
                 Ok(_) => println!("LMS tree created successfully!"),
                 Err(e) => {
-                    eprintln!("Error creating tree: {}", e);
+                    eprintln!("Error creating tree: {e}");
                     std::process::exit(1);
                 }
             }
@@ -110,7 +110,7 @@ fn main() {
         } => match sign_command(&message, file, &private_tree_file, &signature_file, q) {
             Ok(_) => println!("Message signed successfully!"),
             Err(e) => {
-                eprintln!("Error signing message: {}", e);
+                eprintln!("Error signing message: {e}");
                 std::process::exit(1);
             }
         },
@@ -130,7 +130,7 @@ fn main() {
                 }
             }
             Err(e) => {
-                eprintln!("Error verifying signature: {}", e);
+                eprintln!("Error verifying signature: {e}");
                 std::process::exit(1);
             }
         },
@@ -171,8 +171,7 @@ fn create_tree_inner<const N: usize>(
         (24, "H25") => lms_hss::LmsAlgorithmType::LmsSha256N24H25,
         _ => {
             return Err(format!(
-                "Invalid combination: hash_width={}, height={}",
-                N, lms_height
+                "Invalid combination: hash_width={N}, height={lms_height}"
             ))
         }
     };
@@ -189,8 +188,7 @@ fn create_tree_inner<const N: usize>(
         (24, 8) => lms_hss::LmotsAlgorithmType::LmotsSha256N24W8,
         _ => {
             return Err(format!(
-                "Invalid combination: hash_width={}, ots_w={}",
-                N, ots_w
+                "Invalid combination: hash_width={N}, ots_w={ots_w}"
             ))
         }
     };
@@ -202,17 +200,17 @@ fn create_tree_inner<const N: usize>(
     let public_key_bytes = lms_hss::serialize_public_key(&public_key);
     let public_key_hex = hex::encode(&public_key_bytes);
     fs::write(public_key_file, public_key_hex)
-        .map_err(|e| format!("Failed to write public key file: {}", e))?;
+        .map_err(|e| format!("Failed to write public key file: {e}"))?;
 
     // Serialize and save private tree (as JSON for now - this is a simplified approach)
     let tree_data = PrivateTreeData::from_tree(&private_tree, &lms_type, &ots_type);
     let tree_json = serde_json::to_string_pretty(&tree_data)
-        .map_err(|e| format!("Failed to serialize private tree: {}", e))?;
+        .map_err(|e| format!("Failed to serialize private tree: {e}"))?;
     fs::write(private_tree_file, tree_json)
-        .map_err(|e| format!("Failed to write private tree file: {}", e))?;
+        .map_err(|e| format!("Failed to write private tree file: {e}"))?;
 
-    println!("Public key saved to: {}", public_key_file);
-    println!("Private tree saved to: {}", private_tree_file);
+    println!("Public key saved to: {public_key_file}");
+    println!("Private tree saved to: {private_tree_file}");
 
     Ok(())
 }
@@ -226,16 +224,16 @@ fn sign_command(
 ) -> Result<(), String> {
     // Read message
     let message_bytes = if from_file {
-        fs::read(message).map_err(|e| format!("Failed to read message file: {}", e))?
+        fs::read(message).map_err(|e| format!("Failed to read message file: {e}"))?
     } else {
         message.as_bytes().to_vec()
     };
 
     // Load private tree
     let tree_json = fs::read_to_string(private_tree_file)
-        .map_err(|e| format!("Failed to read private tree file: {}", e))?;
+        .map_err(|e| format!("Failed to read private tree file: {e}"))?;
     let tree_data: PrivateTreeData = serde_json::from_str(&tree_json)
-        .map_err(|e| format!("Failed to parse private tree: {}", e))?;
+        .map_err(|e| format!("Failed to parse private tree: {e}"))?;
 
     match tree_data.hash_width {
         32 => sign_inner::<32>(&message_bytes, &tree_data, signature_file, q),
@@ -280,10 +278,10 @@ fn sign_inner<const N: usize>(
     let signature_bytes = lms_hss::serialize_signature(&signature);
     let signature_hex = hex::encode(&signature_bytes);
     fs::write(signature_file, signature_hex)
-        .map_err(|e| format!("Failed to write signature file: {}", e))?;
+        .map_err(|e| format!("Failed to write signature file: {e}"))?;
 
-    println!("Signature saved to: {}", signature_file);
-    println!("Used q value: {}", q_to_use);
+    println!("Signature saved to: {signature_file}");
+    println!("Used q value: {q_to_use}");
 
     Ok(())
 }
@@ -296,22 +294,22 @@ fn verify_command(
 ) -> Result<bool, String> {
     // Read message
     let message_bytes = if from_file {
-        fs::read(message).map_err(|e| format!("Failed to read message file: {}", e))?
+        fs::read(message).map_err(|e| format!("Failed to read message file: {e}"))?
     } else {
         message.as_bytes().to_vec()
     };
 
     // Load public key
     let public_key_hex = fs::read_to_string(public_key_file)
-        .map_err(|e| format!("Failed to read public key file: {}", e))?;
+        .map_err(|e| format!("Failed to read public key file: {e}"))?;
     let public_key_bytes = hex::decode(public_key_hex.trim())
-        .map_err(|e| format!("Failed to decode public key hex: {}", e))?;
+        .map_err(|e| format!("Failed to decode public key hex: {e}"))?;
 
     // Load signature
     let signature_hex = fs::read_to_string(signature_file)
-        .map_err(|e| format!("Failed to read signature file: {}", e))?;
+        .map_err(|e| format!("Failed to read signature file: {e}"))?;
     let signature_bytes = hex::decode(signature_hex.trim())
-        .map_err(|e| format!("Failed to decode signature hex: {}", e))?;
+        .map_err(|e| format!("Failed to decode signature hex: {e}"))?;
 
     // Determine hash width from public key
     let hash_width = match public_key_bytes.len() {
