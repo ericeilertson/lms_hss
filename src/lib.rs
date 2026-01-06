@@ -42,8 +42,11 @@ pub type Sha256Digest = HashValue<32>;
 pub type Sha192Digest = HashValue<24>;
 pub type LmsIdentifier = [u8; 16];
 
-pub fn slice_to_num(buff: &[u8]) -> u32 {
-    u32::from_be_bytes(buff.try_into().unwrap())
+pub fn slice_to_num(buff: &[u8]) -> LMSResult<u32> {
+    let bytes: [u8; 4] = buff
+        .try_into()
+        .map_err(|_| format!("Invalid slice length: expected 4 bytes, got {}", buff.len()))?;
+    Ok(u32::from_be_bytes(bytes))
 }
 
 #[derive(Debug)]
@@ -566,10 +569,10 @@ pub fn parse_public_contents<const N: usize>(public_string: &[u8]) -> LMSResult<
         return Err("Public key string is the wrong size".to_string());
     }
     let mut pos = 0;
-    let lms_type = lookup_lms_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
+    let lms_type = lookup_lms_algorithm_type(slice_to_num(&public_string[pos..pos + 4])?)?;
     pos += 4;
 
-    let lmots_type = lookup_lmots_algorithm_type(slice_to_num(&public_string[pos..pos + 4]))?;
+    let lmots_type = lookup_lmots_algorithm_type(slice_to_num(&public_string[pos..pos + 4])?)?;
     pos += 4;
 
     let (hash_width, _) = get_lms_parameters(&lms_type)?;
@@ -620,10 +623,10 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
         return Err("Signature string is too short".to_string());
     }
     let mut pos = 0;
-    let q = slice_to_num(&signature[pos..pos + 4]);
+    let q = slice_to_num(&signature[pos..pos + 4])?;
     pos += 4;
 
-    let ots_type = lookup_lmots_algorithm_type(slice_to_num(&signature[pos..pos + 4]))?;
+    let ots_type = lookup_lmots_algorithm_type(slice_to_num(&signature[pos..pos + 4])?)?;
     pos += 4;
     let lmots_params = get_lmots_parameters(&ots_type)?;
     if lmots_params.n as usize != N {
@@ -646,7 +649,7 @@ pub fn parse_signature_contents<const N: usize>(signature: &[u8]) -> LMSResult<L
         y.push(HashValue::<N>::from(tmp));
         pos += N;
     }
-    let lms_type = lookup_lms_algorithm_type(slice_to_num(&signature[pos..pos + 4]))?;
+    let lms_type = lookup_lms_algorithm_type(slice_to_num(&signature[pos..pos + 4])?)?;
     pos += 4;
 
     let (hash_width, height) = get_lms_parameters(&lms_type)?;
@@ -1691,5 +1694,68 @@ mod tests {
         let final_verification =
             verify_lms_signature(&message, &lms_public_key, &final_lms_sig).unwrap();
         assert!(!final_verification);
+    }
+
+    #[test]
+    fn test_slice_to_num_invalid_input() {
+        // Test that slice_to_num returns an error instead of panicking
+        // when given an invalid slice length
+
+        // Test with empty slice
+        let empty_slice: &[u8] = &[];
+        let result = slice_to_num(empty_slice);
+        assert!(result.is_err());
+
+        // Test with slice too short (less than 4 bytes)
+        let short_slice: &[u8] = &[0x01, 0x02];
+        let result = slice_to_num(short_slice);
+        assert!(result.is_err());
+
+        // Test with slice too long (more than 4 bytes)
+        let long_slice: &[u8] = &[0x01, 0x02, 0x03, 0x04, 0x05];
+        let result = slice_to_num(long_slice);
+        assert!(result.is_err());
+
+        // Test with valid 4-byte slice (should succeed)
+        let valid_slice: &[u8] = &[0x00, 0x00, 0x00, 0x05];
+        let result = slice_to_num(valid_slice);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5);
+    }
+
+    #[test]
+    fn test_parse_public_key_invalid_length() {
+        // Test that parsing a public key with invalid data returns an error
+        // instead of panicking (security fix for alert #9)
+
+        // Test with truncated public key (missing bytes)
+        let truncated_key: Vec<u8> = vec![0x00, 0x00, 0x00]; // Only 3 bytes instead of 4
+        let result = parse_public_contents::<32>(&truncated_key);
+        assert!(result.is_err());
+
+        // Test with malformed public key where slice_to_num would be called
+        // on invalid data
+        let malformed_key: Vec<u8> = vec![0x00; 56]; // 24 + 32 = 56 bytes (correct size)
+                                                     // But first 4 bytes would try to be parsed as a number
+        let result = parse_public_contents::<32>(&malformed_key);
+        // This should fail at algorithm lookup, not at slice_to_num
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_signature_invalid_length() {
+        // Test that parsing a signature with invalid data returns an error
+        // instead of panicking (security fix for alert #9)
+
+        // Test with truncated signature (only 2 bytes)
+        let truncated_sig: Vec<u8> = vec![0x00, 0x00];
+        let result = parse_signature_contents::<32>(&truncated_sig);
+        assert!(result.is_err());
+
+        // Test with 8 bytes but malformed content
+        let malformed_sig: Vec<u8> = vec![0x00; 8];
+        let result = parse_signature_contents::<32>(&malformed_sig);
+        // This should fail gracefully (not panic)
+        assert!(result.is_err());
     }
 }
