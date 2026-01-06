@@ -45,7 +45,7 @@ pub type LmsIdentifier = [u8; 16];
 pub fn slice_to_num(buff: &[u8]) -> LMSResult<u32> {
     let bytes: [u8; 4] = buff
         .try_into()
-        .map_err(|_| "Invalid slice length: expected 4 bytes".to_string())?;
+        .map_err(|_| format!("Invalid slice length: expected 4 bytes, got {}", buff.len()))?;
     Ok(u32::from_be_bytes(bytes))
 }
 
