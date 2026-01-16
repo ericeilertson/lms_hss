@@ -722,6 +722,9 @@ pub fn verify_lms_signature<const N: usize>(
     lms_sig: &LmsSignature<N>,
 ) -> LMSResult<bool> {
     let (_, tree_height) = get_lms_parameters(&lms_sig.lms_type)?;
+    if lms_sig.path.len() != tree_height as usize {
+        return Err("Invalid path length in signature".to_string());
+    }
     let mut node_num = (1 << tree_height) + lms_sig.q;
     if node_num > 2 << tree_height {
         return Err("Invalid node number".to_string());
@@ -1691,5 +1694,39 @@ mod tests {
         let final_verification =
             verify_lms_signature(&message, &lms_public_key, &final_lms_sig).unwrap();
         assert!(!final_verification);
+    }
+
+    #[test]
+    fn test_verify_lms_signature_rejects_truncated_path() {
+        // Create a valid LMS tree and signature
+        let message = b"test message";
+        let lms_type = LmsAlgorithmType::LmsSha256N32H5;
+        let ots_type = LmotsAlgorithmType::LmotsSha256N32W8;
+
+        let (lms_public_key, lms_tree) = create_lms_tree::<32>(&lms_type, &ots_type).unwrap();
+
+        let mut lms_sig = lms_sign_message(
+            &ots_type,
+            &lms_type,
+            message,
+            &lms_tree.private_keys[0],
+            0,
+            &lms_tree,
+        )
+        .unwrap();
+
+        // Verify the valid signature works
+        let valid = verify_lms_signature(message, &lms_public_key, &lms_sig).unwrap();
+        assert!(valid);
+
+        // Now truncate the path to create a malformed signature
+        // For H5, tree_height=5, so path should have 5 elements
+        // Removing elements should trigger the validation error
+        lms_sig.path.pop();
+
+        // This should return an error, not panic
+        let result = verify_lms_signature(message, &lms_public_key, &lms_sig);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid path length"));
     }
 }

@@ -50,35 +50,35 @@ fn test_cavp_32() {
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
             let lms_sig_result = lms_hss::parse_signature_contents::<32>(&sig);
-            if lms_sig_result.is_err() {
-                if !t.testPassed {
-                    passed += 1;
-                    continue;
-                } else {
-                    println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                    continue;
-                }
-            } else {
-                let lms_sig = lms_sig_result.unwrap();
-                let success_result = lms_hss::verify_lms_signature(
-                    &hex::decode(&t.message).unwrap(),
-                    &pub_key,
-                    &lms_sig,
-                );
-                if success_result.is_err() {
+            let lms_sig = match lms_sig_result {
+                Ok(sig) => sig,
+                Err(_) => {
                     if !t.testPassed {
                         passed += 1;
-                        continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        continue;
                     }
-                } else {
-                    let success = success_result.unwrap();
+                    continue;
+                }
+            };
+            let success_result = lms_hss::verify_lms_signature(
+                &hex::decode(&t.message).unwrap(),
+                &pub_key,
+                &lms_sig,
+            );
+            match success_result {
+                Ok(success) => {
                     if success != t.testPassed {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
                     } else {
                         passed += 1;
+                    }
+                }
+                Err(_) => {
+                    if !t.testPassed {
+                        passed += 1;
+                    } else {
+                        println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
                     }
                 }
             }
@@ -103,37 +103,37 @@ fn test_cavp_24() {
         for t in &tg.tests {
             let sig = hex::decode(&t.signature).unwrap();
             let lms_sig_result = lms_hss::parse_signature_contents::<24>(&sig);
-            if lms_sig_result.is_err() {
-                if !t.testPassed {
-                    passed += 1;
-                    continue;
-                } else {
-                    println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                    continue;
-                }
-            } else {
-                let lms_sig = lms_sig_result.unwrap();
-                let serialized = lms_hss::serialize_signature::<24>(&lms_sig);
-                assert_eq!(serialized, sig);
-                let success_result = lms_hss::verify_lms_signature(
-                    &hex::decode(&t.message).unwrap(),
-                    &pub_key,
-                    &lms_sig,
-                );
-                if success_result.is_err() {
+            let lms_sig = match lms_sig_result {
+                Ok(sig) => sig,
+                Err(_) => {
                     if !t.testPassed {
                         passed += 1;
-                        continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        continue;
                     }
-                } else {
-                    let success = success_result.unwrap();
+                    continue;
+                }
+            };
+            let serialized = lms_hss::serialize_signature::<24>(&lms_sig);
+            assert_eq!(serialized, sig);
+            let success_result = lms_hss::verify_lms_signature(
+                &hex::decode(&t.message).unwrap(),
+                &pub_key,
+                &lms_sig,
+            );
+            match success_result {
+                Ok(success) => {
                     if success != t.testPassed {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
                     } else {
                         passed += 1;
+                    }
+                }
+                Err(_) => {
+                    if !t.testPassed {
+                        passed += 1;
+                    } else {
+                        println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
                     }
                 }
             }
