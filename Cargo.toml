@@ -2,6 +2,15 @@
 name = "lms_hss"
 version = "0.2.0"
 edition = "2021"
+description = "LMS (Lamport Merkle Signature) implementation with CLI"
+authors = ["Eric Eilertson"]
+license = "MIT OR Apache-2.0"
+keywords = ["cryptography", "signatures", "post-quantum", "lms"]
+categories = ["cryptography", "command-line-utilities"]
+
+[[bin]]
+name = "lms-cli"
+path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -9,6 +18,9 @@ edition = "2021"
 sha2 = "0.10.6"
 rand = "0.8.5"
 hex = "0.4.3"
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # these are needed for the cavp tests
 [dev-dependencies]
