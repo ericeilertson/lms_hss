@@ -51,38 +51,36 @@ fn test_cavp_32() {
             let sig = hex::decode(&t.signature).unwrap();
             let lms_sig_result = lms_hss::parse_signature_contents::<32>(&sig);
             let lms_sig = match lms_sig_result {
+                Ok(sig) => sig,
                 Err(_) => {
                     if !t.testPassed {
                         passed += 1;
-                        continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        continue;
                     }
+                    continue;
                 }
-                Ok(sig) => sig,
             };
             let success_result = lms_hss::verify_lms_signature(
                 &hex::decode(&t.message).unwrap(),
                 &pub_key,
                 &lms_sig,
             );
-            let success = match success_result {
+            match success_result {
+                Ok(success) => {
+                    if success != t.testPassed {
+                        println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
+                    } else {
+                        passed += 1;
+                    }
+                }
                 Err(_) => {
                     if !t.testPassed {
                         passed += 1;
-                        continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        continue;
                     }
                 }
-                Ok(result) => result,
-            };
-            if success != t.testPassed {
-                println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-            } else {
-                passed += 1;
             }
         }
         assert_eq!(passed, tg.tests.len());
@@ -106,16 +104,15 @@ fn test_cavp_24() {
             let sig = hex::decode(&t.signature).unwrap();
             let lms_sig_result = lms_hss::parse_signature_contents::<24>(&sig);
             let lms_sig = match lms_sig_result {
+                Ok(sig) => sig,
                 Err(_) => {
                     if !t.testPassed {
                         passed += 1;
-                        continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        continue;
                     }
+                    continue;
                 }
-                Ok(sig) => sig,
             };
             let serialized = lms_hss::serialize_signature::<24>(&lms_sig);
             assert_eq!(serialized, sig);
@@ -124,22 +121,21 @@ fn test_cavp_24() {
                 &pub_key,
                 &lms_sig,
             );
-            let success = match success_result {
+            match success_result {
+                Ok(success) => {
+                    if success != t.testPassed {
+                        println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
+                    } else {
+                        passed += 1;
+                    }
+                }
                 Err(_) => {
                     if !t.testPassed {
                         passed += 1;
-                        continue;
                     } else {
                         println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-                        continue;
                     }
                 }
-                Ok(result) => result,
-            };
-            if success != t.testPassed {
-                println!("test failed tg: {} tcId: {}", tg.tgId, t.tcId);
-            } else {
-                passed += 1;
             }
         }
         assert_eq!(passed, tg.tests.len());
